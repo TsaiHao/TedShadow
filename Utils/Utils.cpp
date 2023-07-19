@@ -5,6 +5,8 @@
 
 using ted::Logger;
 
+Logger ted::logger = Logger();
+
 void Logger::sink(std::string_view message) {
-  std::cout << message << std::endl;
+  std::cout << "ted log: " << message << std::endl;
 }
