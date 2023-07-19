@@ -15,22 +15,27 @@ enum class LogLevel { Info, Error };
 
 class Logger {
 public:
-  void sink(std::string_view message);
-
-  template <typename ...Args>
-  void _log(LogLevel level, std::string_view str, Args &&...args) {
-    sink(format(str, std::forward<Args>(args)...));
-  }
+  Logger(std::ostream &os);
 
   template <typename ...Args>
   void info(std::string_view str, Args &&...args) {
-    _log(LogLevel::Info, str, std::forward<Args>(args)...);
+    this->log(LogLevel::Info, str, std::forward<Args>(args)...);
   }
 
   template <typename ...Args>
-  void error(std::string_view format, Args &&...args) {
-    _log(LogLevel::Error, format, std::forward<Args>(args)...);
+  void error(std::string_view str, Args &&...args) {
+    this->log(LogLevel::Error, str, std::forward<Args>(args)...);
   }
+
+private:
+  void sink(LogLevel level, std::string_view message);
+
+  template <typename ...Args>
+  void log(LogLevel level, std::string_view str, Args &&...args) {
+    sink(level, vformat(str, std::make_format_args(args...)));
+  }
+
+  std::ostream &os;
 };
 extern Logger logger;
 
