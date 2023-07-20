@@ -2,7 +2,9 @@
 
 #include <vector>
 #include <mutex>
-#include <SDL.h>
+#include <condition_variable>
+
+#include <SDL2/SDL.h>
 
 namespace ted {
 class AudioPlayer {

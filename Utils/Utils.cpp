@@ -1,6 +1,11 @@
+#include <curl/curl.h>
 #include <fstream>
 #include <iostream>
+#include <stdint.h>
 
+extern "C" {
+#include <libavutil/avutil.h>
+}
 #include "Utils.h"
 
 using ted::Logger;
@@ -35,6 +40,14 @@ SimpleDownloader::~SimpleDownloader() {
   }
 }
 
+int SimpleDownloader::setOption(CURLoption curlOption, void *value) {
+  if (mCurl == nullptr) {
+    logger.error("curl not init {}", mUrl);
+    return -1;
+  }
+  CURLcode res = curl_easy_setopt(mCurl, curlOption, value);
+}
+
 int SimpleDownloader::init() {
   if (mCurl != nullptr) {
     logger.error("try to reinit curl {}", mUrl);
@@ -57,6 +70,7 @@ int SimpleDownloader::init() {
   curl_easy_setopt(mCurl, CURLOPT_NOPROGRESS, 0L);
   curl_easy_setopt(mCurl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(mCurl, CURLOPT_FAILONERROR, 1L);
+  // curl_easy_setopt(mCurl, CURLOPT_PROXY, "http://127.0.0.1:7890");
 
   return 0;
 }
@@ -78,3 +92,9 @@ int SimpleDownloader::download() {
 }
 
 std::string SimpleDownloader::getLocalPath() const { return mLocalPath; }
+
+std::string ted::getFFmpegErrorStr(int error) {
+  std::string ret(100, '0');
+  av_strerror(error, ret.data(), ret.size());
+  return ret;
+}

@@ -5,6 +5,8 @@
 #include <libavformat/avformat.h>
 #include <libavutil/frame.h>
 
+#include <assert.h>
+
 using ted::AudioDecoder;
 using ted::AudioParam;
 
@@ -149,13 +151,13 @@ std::vector<float> AudioDecoder::getNextFrame() {
         logger.info("Audio decoder reached end of file");
         break;
       } else {
-        logger.error("Audio decoder failed to read frame: {}", av_err2str(ret));
+        logger.error("Audio decoder failed to read frame: {}", getFFmpegErrorStr(ret));
       }
     }
 
     ret = avcodec_send_packet(mCodecContext, mPacket);
     if (ret < 0) {
-      logger.error("Audio decoder failed to send packet: {}", av_err2str(ret));
+      logger.error("Audio decoder failed to send packet: {}", getFFmpegErrorStr(ret));
       return {};
     }
 
@@ -165,7 +167,7 @@ std::vector<float> AudioDecoder::getNextFrame() {
         continue;
       }
       logger.error("Audio decoder failed to receive frame: {}",
-                   av_err2str(ret));
+                   getFFmpegErrorStr(ret));
       return {};
     } else {
       break;

@@ -82,7 +82,9 @@ TEST_CASE("test audio player", "[audio]") {
   auto audioPlayer = ted::AudioPlayer();
   REQUIRE(audioPlayer.init() == 0);
 
-  for (int i = 0; i < 48000 / 1024 * 5; ++i) {
+  ted::logger.info("start playing 20 seconds sound");
+  
+  for (int i = 0; i < 48000 / 1024 * 20; ++i) {
     auto audioFrame = decoder.getNextFrame();
     REQUIRE(audioFrame.size() > 1);
 

@@ -62,6 +62,8 @@ public:
 
   ~SimpleDownloader();
 
+  int setOption(CURLoption curlOption, void *value);
+
   int init();
 
   int download();
@@ -75,5 +77,7 @@ private:
   CURL *mCurl = nullptr;
   FILE *mFile = nullptr;
 };
+
+std::string getFFmpegErrorStr(int error);
 
 } // namespace ted
