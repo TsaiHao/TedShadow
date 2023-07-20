@@ -3,11 +3,15 @@
 #include <format>
 #include <string>
 
+#include <curl/curl.h>
+
 #ifdef __cpp_lib_format
 using std::format;
+using std::make_format_args;
 #else
 #include <fmt/format.h>
 using fmt::format;
+using fmt::make_format_args;
 #endif
 
 namespace ted {
@@ -15,34 +19,61 @@ enum class LogLevel { Info, Error };
 
 class Logger {
 public:
-  Logger(std::ostream &os);
+  explicit Logger(std::ostream &os);
 
-  template <typename ...Args>
-  void info(std::string_view str, Args &&...args) {
+  template <typename... Args> void info(std::string_view str, Args &&...args) {
     this->log(LogLevel::Info, str, std::forward<Args>(args)...);
   }
 
-  template <typename ...Args>
-  void error(std::string_view str, Args &&...args) {
+  template <typename... Args> void error(std::string_view str, Args &&...args) {
     this->log(LogLevel::Error, str, std::forward<Args>(args)...);
   }
 
 private:
   void sink(LogLevel level, std::string_view message);
 
-  template <typename ...Args>
+  template <typename... Args>
   void log(LogLevel level, std::string_view str, Args &&...args) {
-    sink(level, vformat(str, std::make_format_args(args...)));
+    sink(level, vformat(str, make_format_args(args...)));
   }
 
   std::ostream &os;
 };
 extern Logger logger;
 
-enum class AudioFormat { Float32, Int16, Int32 };
+enum class AudioFormat {
+  None,
+  Float32,
+  Int16,
+  Int32,
+  Float32_Planar,
+  Int16_Planar,
+  Int32_Planar
+};
 struct AudioParam {
   int sampleRate = 0;
   int channels = 0;
-  AudioFormat sampleFormat;
+  AudioFormat sampleFormat = AudioFormat::Float32;
 };
+
+class SimpleDownloader {
+public:
+  SimpleDownloader(std::string url, std::string localPath);
+
+  ~SimpleDownloader();
+
+  int init();
+
+  int download();
+
+  [[nodiscard]] std::string getLocalPath() const;
+
+private:
+  std::string mUrl;
+  std::string mLocalPath;
+
+  CURL *mCurl = nullptr;
+  FILE *mFile = nullptr;
+};
+
 } // namespace ted

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <libavutil/frame.h>
 extern "C" {
+#include <libavutil/frame.h>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
@@ -34,7 +34,7 @@ private:
 
   AVFormatContext* mFormatContext = nullptr;
   AVCodecContext* mCodecContext = nullptr;
-  int streamIndex = -1;
+  int mStreamIndex = -1;
 
   AVFrame *mFrame = nullptr;
   AVPacket *mPacket = nullptr;

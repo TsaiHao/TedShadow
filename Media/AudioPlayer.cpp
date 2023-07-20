@@ -51,7 +51,7 @@ int AudioPlayer::init() {
   mDeviceID = SDL_OpenAudioDevice(nullptr, 0, &want, &have,
                                   SDL_AUDIO_ALLOW_FORMAT_CHANGE);
   if (mDeviceID == 0) {
-    logger.error("Failed to open audio: %s", SDL_GetError());
+    logger.error("Failed to open audio: {}", SDL_GetError());
     return -1;
   }
 
@@ -68,7 +68,7 @@ int AudioPlayer::init() {
 
 int AudioPlayer::play() {
   if (mStatus == SDL_AUDIO_PLAYING || mStatus == SDL_AUDIO_STOPPED) {
-    logger.error("AudioPlayer is in wrong status {}.", mStatus);
+    logger.error("AudioPlayer is in wrong status {}.", (int)mStatus);
     return -1;
   }
 
@@ -80,7 +80,7 @@ int AudioPlayer::play() {
 
 int AudioPlayer::pause() {
   if (mStatus == SDL_AUDIO_PAUSED || mStatus == SDL_AUDIO_STOPPED) {
-    logger.error("AudioPlayer is in wrong status {}.", mStatus);
+    logger.error("AudioPlayer is in wrong status {}.", (int)mStatus);
     return -1;
   }
 

@@ -64,8 +64,14 @@ target_include_directories(TedShadow PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(TedShadow PRIVATE ${SDL2_LIBRARIES})
 
 # find fmt
-find_package(fmt REQUIRED)
-target_link_libraries(TedShadow PRIVATE fmt::fmt)
+pkg_check_modules(FMT REQUIRED IMPORTED_TARGET fmt)
+target_link_libraries(TedShadow PRIVATE PkgConfig::FMT)
+target_include_directories(TedShadow PRIVATE ${FMT_INCLUDE_DIRS})
+
+# find curl
+find_package(CURL REQUIRED)
+target_include_directories(TedShadow PRIVATE ${CURL_INCLUDE_DIRS})
+target_link_libraries(TedShadow PRIVATE ${CURL_LIBRARIES})
 
 if (TS_ENABLE_TEST)
     Include(FetchContent)
@@ -77,13 +83,14 @@ if (TS_ENABLE_TEST)
 
     FetchContent_MakeAvailable(Catch2)
 
-    add_executable(UtilsTest Utils/UtilsTest.cpp)
-    target_link_libraries(UtilsTest PRIVATE Catch2::Catch2WithMain)
-    target_include_directories(UtilsTest PRIVATE ${TS_ROOT})
-    target_sources(UtilsTest PRIVATE ${UTILS_SOURCES})
-
     add_executable(MediaTest Media/MediaTest.cpp)
-    target_link_libraries(MediaTest PRIVATE Catch2::Catch2)
+    target_link_libraries(MediaTest PRIVATE
+            Catch2::Catch2WithMain
+            CURL::libcurl
+            PkgConfig::FMT
+            PkgConfig::FFMPEG
+            SDL2::SDL2
+            )
     target_include_directories(MediaTest PRIVATE ${TS_ROOT})
     target_sources(MediaTest PRIVATE ${MEDIA_SOURCES} ${UTILS_SOURCES})
 endif()

@@ -8,6 +8,28 @@
 using ted::AudioDecoder;
 using ted::AudioParam;
 
+static void interleaveSamples(std::vector<float> &dst,
+                                                 AVFrame *frame) {
+  assert(frame->ch_layout.nb_channels == 2);
+  if (frame->format == AV_SAMPLE_FMT_FLT) {
+    dst.resize(frame->nb_samples * frame->ch_layout.nb_channels);
+    float *dstPtr = dst.data();
+    auto *srcPtr = (float *)frame->data[0];
+    memcpy(dstPtr, srcPtr, dst.size() * sizeof(float));
+  } else if (frame->format == AV_SAMPLE_FMT_FLTP) {
+    // do interleave to dst
+    dst.resize(frame->nb_samples * frame->ch_layout.nb_channels);
+    float *dstPtr = dst.data();
+    auto *srcPtr = (float *)frame->data[0];
+    for (int i = 0; i < frame->nb_samples; ++i) {
+      for (int j = 0; j < frame->ch_layout.nb_channels; ++j) {
+        dstPtr[i * frame->ch_layout.nb_channels + j] =
+            srcPtr[j * frame->nb_samples + i];
+      }
+    }
+  }
+}
+
 AudioDecoder::AudioDecoder(std::string mediaFile)
     : mPath(std::move(mediaFile)) {
   logger.info("Audio decoder created {}", mPath);
@@ -43,6 +65,7 @@ int AudioDecoder::init() {
     logger.error("Audio decoder failed to find audio stream: {}", mPath);
     return -1;
   }
+  mStreamIndex = audioStreamIndex;
 
   for (int i = 0; i < mFormatContext->nb_streams; ++i) {
     if (i == audioStreamIndex) {
@@ -108,14 +131,19 @@ int AudioDecoder::seek(int64_t timestampUs) {
 }
 
 std::vector<float> AudioDecoder::getNextFrame() {
-  if (mFormatContext == nullptr || mCodecContext) {
+  if (mFormatContext == nullptr || mCodecContext == nullptr) {
     logger.error("Audio decoder is not initialized");
     return {};
   }
 
   int ret;
   do {
-    ret = av_read_frame(mFormatContext, mPacket);
+    while (true) {
+      ret = av_read_frame(mFormatContext, mPacket);
+      if (mPacket->stream_index == mStreamIndex) {
+        break;
+      }
+    }
     if (ret < 0) {
       if (ret == AVERROR_EOF) {
         logger.info("Audio decoder reached end of file");
@@ -146,25 +174,23 @@ std::vector<float> AudioDecoder::getNextFrame() {
 
   if (ret == 0) {
     std::vector<float> samples;
-    samples.reserve(mFrame->nb_samples);
-    for (int i = 0; i < mFrame->nb_samples; ++i) {
-      samples.push_back(mFrame->data[0][i]);
-    }
+    samples.reserve(mFrame->nb_samples * mFrame->ch_layout.nb_channels);
+    interleaveSamples(samples, mFrame);
     return samples;
   }
   return {};
 }
 
 AudioParam ted::AudioDecoder::getAudioParam() const {
-  assert(mFormatContext != nullptr);
+  assert(mFormatContext != nullptr && mStreamIndex >= 0);
 
   AudioParam param;
 
   param.sampleRate =
-      mFormatContext->streams[streamIndex]->codecpar->sample_rate;
+      mFormatContext->streams[mStreamIndex]->codecpar->sample_rate;
   param.channels =
-      mFormatContext->streams[streamIndex]->codecpar->ch_layout.nb_channels;
-  switch (mFormatContext->streams[streamIndex]->codecpar->format) {
+      mFormatContext->streams[mStreamIndex]->codecpar->ch_layout.nb_channels;
+  switch (mFormatContext->streams[mStreamIndex]->codecpar->format) {
   case AV_SAMPLE_FMT_S16:
     param.sampleFormat = AudioFormat::Int16;
     break;
@@ -174,8 +200,21 @@ AudioParam ted::AudioDecoder::getAudioParam() const {
   case AV_SAMPLE_FMT_FLT:
     param.sampleFormat = AudioFormat::Float32;
     break;
+  case AV_SAMPLE_FMT_FLTP:
+    param.sampleFormat = AudioFormat::Float32_Planar;
+    break;
+  case AV_SAMPLE_FMT_S16P:
+    param.sampleFormat = AudioFormat::Int16_Planar;
+    break;
+  case AV_SAMPLE_FMT_S32P:
+    param.sampleFormat = AudioFormat::Int32_Planar;
   default:
-    logger.error("Audio decoder failed to get audio param: {}", mPath);
+    logger.error(
+        "Audio decoder failed to get audio param: {}, whose format is {}",
+        mPath,
+        av_get_sample_fmt_name(
+            (AVSampleFormat)mFormatContext->streams[mStreamIndex]
+                ->codecpar->format));
     break;
   }
 
