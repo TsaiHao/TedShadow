@@ -1,12 +1,5 @@
 #pragma once
 
-extern "C" {
-#include <libavutil/frame.h>
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libavutil/avutil.h>
-}
-
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -25,7 +18,7 @@ public:
 
   int seek(int64_t timestampUs);
 
-  std::vector<float> getNextFrame();
+  std::shared_ptr<AVFrame> getNextFrame();
 
   [[nodiscard]] AudioParam getAudioParam() const;
 

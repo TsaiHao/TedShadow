@@ -1,7 +1,9 @@
+#include <_types/_uint8_t.h>
 #include <catch2/catch_test_macros.hpp>
 #include <curl/curl.h>
 
 #include <iostream>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -24,6 +26,33 @@ TEST_CASE("logger output", "[logger]") {
   ss.str("");
   logger.error("test log {}", "log content");
   REQUIRE(ss.str() == "ted error: test log log content\n");
+}
+
+TEST_CASE("test audio interleaving", "[audio]") {
+  auto *frame = av_frame_alloc();
+  frame->format = AV_SAMPLE_FMT_FLTP;
+  frame->nb_samples = 1024;
+  frame->ch_layout.nb_channels = 2;
+  frame->linesize[0] = 1024 * 4;
+  frame->data[0] = (uint8_t *)av_malloc(frame->linesize[0]);
+  frame->data[1] = (uint8_t *)av_malloc(frame->linesize[0]);
+
+  std::iota((float *)frame->data[0], (float *)frame->data[0] + 1024, 0);
+  std::iota((float *)frame->data[1], (float *)frame->data[1] + 1024, 1024);
+
+  auto *interleaved = ted::interleaveSamples(frame);
+
+  REQUIRE(interleaved->format == AV_SAMPLE_FMT_FLT);
+  REQUIRE(interleaved->nb_samples == 1024);
+  REQUIRE(interleaved->ch_layout.nb_channels == 2);
+  REQUIRE(interleaved->linesize[0] == 1024 * 4 * 2);
+  REQUIRE(interleaved->data[0] != frame->data[0]);
+  for (int i = 0; i < 1024; ++i) {
+    REQUIRE(((float *)interleaved->data[0])[i * 2] == i);
+    REQUIRE(((float *)interleaved->data[0])[i * 2 + 1] == i + 1024);
+  }
+
+  av_frame_free(&frame);
 }
 
 static std::string url =
@@ -68,7 +97,7 @@ TEST_CASE("test audio decoder", "[audio]") {
   REQUIRE(decoder.init() == 0);
 
   auto audioFrame = decoder.getNextFrame();
-  REQUIRE(audioFrame.size() > 1);
+  REQUIRE(audioFrame != nullptr);
 }
 
 TEST_CASE("test audio player", "[audio]") {
@@ -83,10 +112,10 @@ TEST_CASE("test audio player", "[audio]") {
   REQUIRE(audioPlayer.init() == 0);
 
   ted::logger.info("start playing 20 seconds sound");
-  
+
   for (int i = 0; i < 48000 / 1024 * 20; ++i) {
     auto audioFrame = decoder.getNextFrame();
-    REQUIRE(audioFrame.size() > 1);
+    REQUIRE(audioFrame != nullptr);
 
     audioPlayer.enqueue(audioFrame);
     if (i == 8) {

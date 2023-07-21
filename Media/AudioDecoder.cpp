@@ -10,28 +10,6 @@
 using ted::AudioDecoder;
 using ted::AudioParam;
 
-static void interleaveSamples(std::vector<float> &dst,
-                                                 AVFrame *frame) {
-  assert(frame->ch_layout.nb_channels == 2);
-  if (frame->format == AV_SAMPLE_FMT_FLT) {
-    dst.resize(frame->nb_samples * frame->ch_layout.nb_channels);
-    float *dstPtr = dst.data();
-    auto *srcPtr = (float *)frame->data[0];
-    memcpy(dstPtr, srcPtr, dst.size() * sizeof(float));
-  } else if (frame->format == AV_SAMPLE_FMT_FLTP) {
-    // do interleave to dst
-    dst.resize(frame->nb_samples * frame->ch_layout.nb_channels);
-    float *dstPtr = dst.data();
-    auto *srcPtr = (float *)frame->data[0];
-    for (int i = 0; i < frame->nb_samples; ++i) {
-      for (int j = 0; j < frame->ch_layout.nb_channels; ++j) {
-        dstPtr[i * frame->ch_layout.nb_channels + j] =
-            srcPtr[j * frame->nb_samples + i];
-      }
-    }
-  }
-}
-
 AudioDecoder::AudioDecoder(std::string mediaFile)
     : mPath(std::move(mediaFile)) {
   logger.info("Audio decoder created {}", mPath);
@@ -43,6 +21,12 @@ AudioDecoder::~AudioDecoder() {
   }
   if (mFormatContext != nullptr) {
     avformat_close_input(&mFormatContext);
+  }
+  if (mFrame != nullptr) {
+    av_frame_free(&mFrame);
+  }
+  if (mPacket != nullptr) {
+    av_packet_free(&mPacket);
   }
   logger.info("Audio decoder destroyed {}", mPath);
 }
@@ -132,7 +116,7 @@ int AudioDecoder::seek(int64_t timestampUs) {
   return 0;
 }
 
-std::vector<float> AudioDecoder::getNextFrame() {
+std::shared_ptr<AVFrame> AudioDecoder::getNextFrame() {
   if (mFormatContext == nullptr || mCodecContext == nullptr) {
     logger.error("Audio decoder is not initialized");
     return {};
@@ -151,13 +135,15 @@ std::vector<float> AudioDecoder::getNextFrame() {
         logger.info("Audio decoder reached end of file");
         break;
       } else {
-        logger.error("Audio decoder failed to read frame: {}", getFFmpegErrorStr(ret));
+        logger.error("Audio decoder failed to read frame: {}",
+                     getFFmpegErrorStr(ret));
       }
     }
 
     ret = avcodec_send_packet(mCodecContext, mPacket);
     if (ret < 0) {
-      logger.error("Audio decoder failed to send packet: {}", getFFmpegErrorStr(ret));
+      logger.error("Audio decoder failed to send packet: {}",
+                   getFFmpegErrorStr(ret));
       return {};
     }
 
@@ -174,11 +160,11 @@ std::vector<float> AudioDecoder::getNextFrame() {
     }
   } while (true);
 
-  if (ret == 0) {
-    std::vector<float> samples;
-    samples.reserve(mFrame->nb_samples * mFrame->ch_layout.nb_channels);
-    interleaveSamples(samples, mFrame);
-    return samples;
+  if (ret == 0 && mFrame->linesize[0] > 0) {
+    auto *frame = interleaveSamples(mFrame);
+    return {frame, [](AVFrame *frame) {
+      av_frame_free(&frame);
+    }};
   }
   return {};
 }

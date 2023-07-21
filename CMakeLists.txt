@@ -11,6 +11,7 @@ option(TS_ENABLE_TEST "Enable test" OFF)
 
 add_executable(TedShadow App/TedShadow.cpp)
 target_include_directories(TedShadow PRIVATE ${TS_ROOT})
+target_compile_options(TedShadow PRIVATE -Wall -Wextra -Werror)
 
 # add sources
 set(IMGUI_SOURCES

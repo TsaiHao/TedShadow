@@ -14,6 +14,14 @@ using fmt::format;
 using fmt::make_format_args;
 #endif
 
+extern "C" {
+#include <libavutil/avutil.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/frame.h>
+#include <libswresample/swresample.h>
+}
+
 namespace ted {
 enum class LogLevel { Info, Error };
 
@@ -55,6 +63,8 @@ struct AudioParam {
   int channels = 0;
   AudioFormat sampleFormat = AudioFormat::Float32;
 };
+
+AVFrame *interleaveSamples(AVFrame *frame);
 
 class SimpleDownloader {
 public:

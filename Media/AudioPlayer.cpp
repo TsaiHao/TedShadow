@@ -14,23 +14,38 @@ void AudioPlayer::audioCallback(void *userData, Uint8 *stream, int len) {
   auto player = static_cast<AudioPlayer *>(userData);
   auto &buffer = player->mAudioBuffer;
 
-  std::lock_guard<std::mutex> lock(player->mBufferMutex);
+  int needSample = len / sizeof(float) / player->mSpec.channels;
+  size_t dstOffset = 0;
 
-  if (buffer.empty()) {
-    logger.info("Audio producer is too slow");
-    memset(stream, 0, len);
-    return;
+  std::unique_lock lock(player->mBufferMutex);
+  while (needSample > 0 && !buffer.empty()) {
+    auto &cache = buffer.front();
+    auto frame = cache.frame;
+    assert(frame->format == AV_SAMPLE_FMT_FLT &&
+           frame->ch_layout.nb_channels == 2);
+    auto &progress = cache.progress;
+    size_t srcOffset = progress * sizeof(float) * player->mSpec.channels;
+
+    size_t copySize = std::min(
+        (frame->nb_samples - progress) * sizeof(float) * player->mSpec.channels,
+        needSample * sizeof(float) * player->mSpec.channels);
+
+    memcpy(stream + dstOffset, frame->data[0] + srcOffset, copySize);
+    dstOffset += copySize;
+    needSample -= copySize / sizeof(float) / player->mSpec.channels;
+    progress += copySize / sizeof(float) / player->mSpec.channels;
+
+    if (progress == frame->nb_samples) {
+      buffer.pop_front();
+      player->mBufferCond.notify_one();
+    }
   }
 
-  auto size = len / sizeof(float);
-  auto readSize = std::min(size, buffer.size());
-  memcpy(stream, buffer.data(), readSize * sizeof(float));
-  buffer.erase(buffer.begin(), buffer.begin() + readSize);
-  if (readSize < size) {
-    memset(stream + readSize * sizeof(float), 0,
-           (size - readSize) * sizeof(float));
+  lock.unlock();
+  if (needSample > 0) {
+    memset(stream + dstOffset, 0,
+           needSample * sizeof(float) * player->mSpec.channels);
   }
-  player->mBufferCond.notify_all();
 }
 
 int AudioPlayer::init() {
@@ -90,13 +105,15 @@ int AudioPlayer::pause() {
   return 0;
 }
 
-int ted::AudioPlayer::enqueue(const std::vector<float> &data) {
+int ted::AudioPlayer::enqueue(const std::shared_ptr<AVFrame> &frame) {
   std::unique_lock lock(mBufferMutex);
 
   while (mAudioBuffer.size() > MAX_AUDIO_BUFFER_SIZE) {
     mBufferCond.wait(lock);
   }
-  mAudioBuffer.insert(mAudioBuffer.end(), data.begin(), data.end());
+
+  AudioCache cache{.frame = frame, .progress = 0};
+  mAudioBuffer.push_back(cache);
 
   return 0;
 }
