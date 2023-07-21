@@ -1,13 +1,9 @@
-#include <_types/_uint8_t.h>
 #include <catch2/catch_test_macros.hpp>
-#include <curl/curl.h>
 
-#include <iostream>
+#include <memory>
 #include <numeric>
 #include <string>
-#include <vector>
 
-#include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -96,7 +92,10 @@ TEST_CASE("test audio decoder", "[audio]") {
   ted::AudioDecoder decoder(local);
   REQUIRE(decoder.init() == 0);
 
-  auto audioFrame = decoder.getNextFrame();
+  std::shared_ptr<AVFrame> audioFrame;
+  int ret = decoder.getNextFrame(audioFrame);
+
+  REQUIRE(ret == 0);
   REQUIRE(audioFrame != nullptr);
 }
 
@@ -114,7 +113,10 @@ TEST_CASE("test audio player", "[audio]") {
   ted::logger.info("start playing 20 seconds sound");
 
   for (int i = 0; i < 48000 / 1024 * 20; ++i) {
-    auto audioFrame = decoder.getNextFrame();
+    std::shared_ptr<AVFrame> audioFrame;
+    int ret = decoder.getNextFrame(audioFrame);
+
+    REQUIRE(ret == 0);
     REQUIRE(audioFrame != nullptr);
 
     audioPlayer.enqueue(audioFrame);

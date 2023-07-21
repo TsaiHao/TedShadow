@@ -5,32 +5,26 @@
 #include <unordered_map>
 
 #include "Utils/Utils.h"
+#include "DecoderBase.h"
 
 namespace ted {
 
-class AudioDecoder {
+class AudioDecoder: public DecoderBase {
 public:
   explicit AudioDecoder(std::string mediaFile);
 
-  ~AudioDecoder();
+  ~AudioDecoder() override;
 
-  int init();
+  int init() override;
 
-  int seek(int64_t timestampUs);
+  int seek(int64_t timestampUs) override;
 
-  std::shared_ptr<AVFrame> getNextFrame();
+  int getNextFrame(std::shared_ptr<AVFrame>& frame) override;
 
   [[nodiscard]] AudioParam getAudioParam() const;
 
 private:
-  std::string mPath;
 
-  AVFormatContext* mFormatContext = nullptr;
-  AVCodecContext* mCodecContext = nullptr;
-  int mStreamIndex = -1;
-
-  AVFrame *mFrame = nullptr;
-  AVPacket *mPacket = nullptr;
 };
 
 }

@@ -1,175 +1,50 @@
 #include "AudioDecoder.h"
+#include "DecoderBase.h"
 #include "Utils/Utils.h"
-#include <libavcodec/avcodec.h>
-#include <libavcodec/packet.h>
-#include <libavformat/avformat.h>
-#include <libavutil/frame.h>
 
-#include <assert.h>
+#include <utility>
 
 using ted::AudioDecoder;
 using ted::AudioParam;
 
 AudioDecoder::AudioDecoder(std::string mediaFile)
-    : mPath(std::move(mediaFile)) {
+    : DecoderBase(std::move(mediaFile), AVMEDIA_TYPE_AUDIO) {
   logger.info("Audio decoder created {}", mPath);
 }
 
 AudioDecoder::~AudioDecoder() {
-  if (mCodecContext != nullptr) {
-    avcodec_free_context(&mCodecContext);
-  }
-  if (mFormatContext != nullptr) {
-    avformat_close_input(&mFormatContext);
-  }
-  if (mFrame != nullptr) {
-    av_frame_free(&mFrame);
-  }
-  if (mPacket != nullptr) {
-    av_packet_free(&mPacket);
-  }
   logger.info("Audio decoder destroyed {}", mPath);
 }
 
 int AudioDecoder::init() {
-  int ret;
-  ret = avformat_open_input(&mFormatContext, mPath.c_str(), nullptr, nullptr);
-  if (ret < 0) {
-    logger.error("Audio decoder failed to open input file: {}", mPath);
-    return -1;
+  int ret = DecoderBase::init();
+
+  if (ret == 0) {
+    logger.info("Audio decoder is ready");
   }
-
-  ret = avformat_find_stream_info(mFormatContext, nullptr);
-  if (ret < 0) {
-    logger.error("Audio decoder failed to find stream info: {}", mPath);
-    return -1;
-  }
-
-  int audioStreamIndex = av_find_best_stream(mFormatContext, AVMEDIA_TYPE_AUDIO,
-                                             -1, -1, nullptr, 0);
-  if (audioStreamIndex < 0) {
-    logger.error("Audio decoder failed to find audio stream: {}", mPath);
-    return -1;
-  }
-  mStreamIndex = audioStreamIndex;
-
-  for (int i = 0; i < mFormatContext->nb_streams; ++i) {
-    if (i == audioStreamIndex) {
-      continue;
-    }
-    mFormatContext->streams[i]->discard = AVDISCARD_ALL;
-  }
-
-  AVStream *audioStream = mFormatContext->streams[audioStreamIndex];
-  AVCodec const *audioCodec =
-      avcodec_find_decoder(audioStream->codecpar->codec_id);
-  if (audioCodec == nullptr) {
-    logger.error("Audio decoder failed to find audio decoder: {}", mPath);
-    return -1;
-  }
-
-  mCodecContext = avcodec_alloc_context3(audioCodec);
-  if (mCodecContext == nullptr) {
-    logger.error("Audio decoder failed to allocate audio codec context: {}",
-                 mPath);
-    return -1;
-  }
-
-  ret = avcodec_parameters_to_context(mCodecContext, audioStream->codecpar);
-  if (ret < 0) {
-    logger.error(
-        "Audio decoder failed to copy audio codec parameters to context: {}",
-        mPath);
-    return -1;
-  }
-
-  ret = avcodec_open2(mCodecContext, audioCodec, nullptr);
-  if (ret < 0) {
-    logger.error("Audio decoder failed to open audio codec: {}", mPath);
-    return -1;
-  }
-
-  mFrame = av_frame_alloc();
-  mPacket = av_packet_alloc();
-
-  logger.info("Audio decoder is ready");
 
   return 0;
 }
 
 int AudioDecoder::seek(int64_t timestampUs) {
-  if (mFormatContext == nullptr) {
-    logger.error("Audio decoder is not initialized");
-    return -1;
-  }
-  int ret = avformat_seek_file(mFormatContext, -1, INT64_MIN, timestampUs,
-                               INT64_MAX, 0);
-  if (ret < 0) {
-    logger.error("Audio decoder failed to seek: {}", mPath);
-    return -1;
-  } else {
-    logger.info("Audio decoder sought to {} us", timestampUs);
-  }
-
-  avcodec_flush_buffers(mCodecContext);
-
-  return 0;
+  return DecoderBase::seek(timestampUs);
 }
 
-std::shared_ptr<AVFrame> AudioDecoder::getNextFrame() {
-  if (mFormatContext == nullptr || mCodecContext == nullptr) {
-    logger.error("Audio decoder is not initialized");
-    return {};
-  }
-
-  int ret;
-  do {
-    while (true) {
-      ret = av_read_frame(mFormatContext, mPacket);
-      if (mPacket->stream_index == mStreamIndex) {
-        break;
-      }
-    }
-    if (ret < 0) {
-      if (ret == AVERROR_EOF) {
-        logger.info("Audio decoder reached end of file");
-        break;
-      } else {
-        logger.error("Audio decoder failed to read frame: {}",
-                     getFFmpegErrorStr(ret));
-      }
-    }
-
-    ret = avcodec_send_packet(mCodecContext, mPacket);
-    if (ret < 0) {
-      logger.error("Audio decoder failed to send packet: {}",
-                   getFFmpegErrorStr(ret));
-      return {};
-    }
-
-    ret = avcodec_receive_frame(mCodecContext, mFrame);
-    if (ret < 0) {
-      if (ret == AVERROR(EAGAIN)) {
-        continue;
-      }
-      logger.error("Audio decoder failed to receive frame: {}",
-                   getFFmpegErrorStr(ret));
-      return {};
-    } else {
-      break;
-    }
-  } while (true);
+int AudioDecoder::getNextFrame(std::shared_ptr<AVFrame>& frame) {
+  int ret = decodeLoopOnce();
 
   if (ret == 0 && mFrame->linesize[0] > 0) {
-    auto *frame = interleaveSamples(mFrame);
-    return {frame, [](AVFrame *frame) {
-      av_frame_free(&frame);
+    auto *interleaved = interleaveSamples(mFrame);
+    frame = {interleaved, [](AVFrame *f) {
+      av_frame_free(&f);
     }};
+    return 0;
+  } else {
+    return ret;
   }
-  return {};
 }
 
-AudioParam ted::AudioDecoder::getAudioParam() const {
+AudioParam AudioDecoder::getAudioParam() const {
   assert(mFormatContext != nullptr && mStreamIndex >= 0);
 
   AudioParam param;

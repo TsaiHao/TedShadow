@@ -32,10 +32,12 @@ target_sources(TedShadow PRIVATE
 )
 
 set(MEDIA_SOURCES
+    Media/DecoderBase.cpp
     Media/VideoDecoder.cpp
     Media/AudioDecoder.cpp
     Media/AudioPlayer.cpp
     Media/GLRenderer.cpp
+    Media/SubtitleDecoder.cpp
 )
 target_sources(TedShadow PRIVATE
     ${MEDIA_SOURCES}

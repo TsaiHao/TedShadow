@@ -15,6 +15,7 @@ using fmt::make_format_args;
 #endif
 
 extern "C" {
+#include <stdint.h>
 #include <libavutil/avutil.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>

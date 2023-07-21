@@ -1,6 +1,4 @@
-#ifndef GL_RENDERER_H
-#define GL_RENDERER_H
+#pragma once
 
 class GLRenderer {};
 
-#endif // GL_RENDERER_H
