@@ -1,5 +1,6 @@
 #include "AudioPlayer.h"
 #include "Utils/Utils.h"
+#include <cassert>
 
 using ted::AudioPlayer;
 

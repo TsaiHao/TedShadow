@@ -35,7 +35,7 @@ int DecoderBase::init() {
     return -1;
   }
 
-  int streamIndex = av_find_best_stream(mFormatContext, AVMEDIA_TYPE_AUDIO, -1,
+  int streamIndex = av_find_best_stream(mFormatContext, mMediaType, -1,
                                         -1, nullptr, 0);
   if (streamIndex < 0) {
     logger.error("Decoder failed to find audio stream: {}, {}", mPath,
@@ -44,18 +44,18 @@ int DecoderBase::init() {
   }
   mStreamIndex = streamIndex;
 
-  for (int i = 0; i < mFormatContext->nb_streams; ++i) {
+  for (int i = 0; i < (int)mFormatContext->nb_streams; ++i) {
     if (i == mStreamIndex) {
       continue;
     }
     mFormatContext->streams[i]->discard = AVDISCARD_ALL;
   }
 
-  AVStream *audioStream = mFormatContext->streams[mStreamIndex];
+  AVStream *stream = mFormatContext->streams[mStreamIndex];
   AVCodec const *audioCodec =
-      avcodec_find_decoder(audioStream->codecpar->codec_id);
+      avcodec_find_decoder(stream->codecpar->codec_id);
   if (audioCodec == nullptr) {
-    logger.error("Decoder failed to find audio decoder: {}, {}", mPath,
+    logger.error("Decoder failed to find decoder: {}, {}", mPath,
                  TYPE_STR);
     return -1;
   }
@@ -67,7 +67,7 @@ int DecoderBase::init() {
     return -1;
   }
 
-  ret = avcodec_parameters_to_context(mCodecContext, audioStream->codecpar);
+  ret = avcodec_parameters_to_context(mCodecContext, stream->codecpar);
   if (ret < 0) {
     logger.error(
         "Decoder failed to copy audio codec parameters to context: {}, {}",
@@ -81,6 +81,8 @@ int DecoderBase::init() {
                  TYPE_STR, getFFmpegErrorStr(ret));
     return -1;
   }
+  logger.info("Decoder opened, codec {}, stream {}, {}", audioCodec->name,
+              mStreamIndex, TYPE_STR);
 
   mFrame = av_frame_alloc();
   mPacket = av_packet_alloc();
@@ -152,3 +154,4 @@ int DecoderBase::decodeLoopOnce() {
 
   return 0;
 }
+

@@ -9,6 +9,7 @@
 
 #include "AudioDecoder.h"
 #include "AudioPlayer.h"
+#include "SubtitleDecoder.h"
 #include "Utils/Utils.h"
 
 #include <sstream>
@@ -126,4 +127,18 @@ TEST_CASE("test audio player", "[audio]") {
   }
 
   REQUIRE(audioPlayer.pause() == 0);
+}
+
+TEST_CASE("test subtitle", "[subtitle]") {
+  DOWNLOAD_TEST_VIDEO
+
+  ted::SubtitleDecoder decoder(local);
+  REQUIRE(decoder.init() == 0);
+
+  AVSubtitle subtitle = decoder.getNextSubtitle();
+
+  REQUIRE(subtitle.num_rects > 0);
+  REQUIRE(subtitle.rects != nullptr);
+  REQUIRE((subtitle.rects[0]->type == SUBTITLE_TEXT || subtitle.rects[0]->type == SUBTITLE_ASS));
+  REQUIRE(strlen(subtitle.rects[0]->ass) > 0);
 }

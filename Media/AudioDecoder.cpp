@@ -2,6 +2,7 @@
 #include "DecoderBase.h"
 #include "Utils/Utils.h"
 
+#include <cassert>
 #include <utility>
 
 using ted::AudioDecoder;

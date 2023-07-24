@@ -1,6 +1,22 @@
-#ifndef SUBTITLE_DECODER_H
-#define SUBTITLE_DECODER_H
+#pragma once
 
-class SubtitleDecoder {};
+#include "DecoderBase.h"
 
-#endif // SUBTITLE_DECODER_H
+namespace ted {
+
+class SubtitleDecoder: public DecoderBase {
+public:
+  explicit SubtitleDecoder(std::string mediaFile);
+
+  ~SubtitleDecoder() override;
+
+  int init() override;
+
+  int seek(int64_t timestampUs) override;
+
+  int getNextFrame(std::shared_ptr<AVFrame> &frame) override; 
+
+  AVSubtitle getNextSubtitle();
+};
+
+}
