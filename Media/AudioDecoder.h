@@ -22,9 +22,6 @@ public:
   int getNextFrame(std::shared_ptr<AVFrame>& frame) override;
 
   [[nodiscard]] AudioParam getAudioParam() const;
-
-private:
-
 };
 
 }
