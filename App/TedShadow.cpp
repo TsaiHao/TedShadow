@@ -12,16 +12,12 @@ int main() {
     return -1;
   }
 
-  std::vector<std::shared_ptr<AVSubtitle>> subtitles;
+  std::vector<ted::Subtitle> subtitles;
   ted::logger.info("parsing subtitles");
   while (true) {
-    std::shared_ptr<AVSubtitle> subtitle;
+    ted::Subtitle subtitle;
     ret = subtitleDecoder.getNextSubtitle(subtitle);
     if (ret != 0) {
-      break;
-    }
-    if (subtitle == nullptr) {
-      ted::logger.error("subtitle is null");
       break;
     }
     subtitles.push_back(subtitle);

@@ -1,12 +1,22 @@
+#include <cassert>
 #include <curl/curl.h>
 #include <fstream>
 #include <iostream>
 #include <vector>
-#include <cassert>
 
 #include "Utils.h"
 
 using ted::Logger;
+
+namespace ted {
+bool operator==(const ted::Time &lhs, const ted::Time &rhs) {
+  return lhs.num * rhs.den == rhs.num * lhs.den;
+}
+
+bool operator!=(const ted::Time &lhs, const ted::Time &rhs) {
+  return !(lhs == rhs);
+}
+} // namespace ted
 
 // todo: buggy code
 Logger ted::logger = Logger(std::cout);

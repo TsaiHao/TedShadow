@@ -135,10 +135,10 @@ TEST_CASE("test subtitle", "[subtitle]") {
   ted::SubtitleDecoder decoder(local);
   REQUIRE(decoder.init() == 0);
 
-  AVSubtitle subtitle = decoder.getNextSubtitle();
+  ted::Subtitle subtitle;
+  int ret = decoder.getNextSubtitle(subtitle);
 
-  REQUIRE(subtitle.num_rects > 0);
-  REQUIRE(subtitle.rects != nullptr);
-  REQUIRE((subtitle.rects[0]->type == SUBTITLE_TEXT || subtitle.rects[0]->type == SUBTITLE_ASS));
-  REQUIRE(strlen(subtitle.rects[0]->ass) > 0);
+  REQUIRE(ret == 0);
+  REQUIRE(!subtitle.text.empty());
+  REQUIRE(subtitle.start != subtitle.end);
 }

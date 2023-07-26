@@ -15,15 +15,41 @@ using fmt::make_format_args;
 #endif
 
 extern "C" {
-#include <stdint.h>
-#include <libavutil/avutil.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
 #include <libavutil/frame.h>
 #include <libswresample/swresample.h>
+#include <stdint.h>
 }
 
 namespace ted {
+
+struct Time {
+  int64_t num;
+  int64_t den;
+
+  explicit Time(int64_t us, int64_t base = 1000000) : num(us), den(base) {}
+
+  [[nodiscard]] int64_t us() const { return num * 1000000 / den; }
+
+  [[nodiscard]] int64_t ms() const { return num * 1000 / den; }
+
+  [[nodiscard]] int64_t s() const { return num / den; }
+
+  static Time fromUs(int64_t us) { return Time{us, 1000000}; }
+
+  static Time fromMs(int64_t ms) { return Time{ms, 1000}; }
+
+  static Time fromS(int64_t s) { return Time{s, 1}; }
+
+  static Time fromAVTime(int64_t avTime, AVRational timebase) {
+    return Time{avTime * timebase.num, timebase.den};
+  }
+};
+bool operator==(const Time &lhs, const Time &rhs);
+bool operator!=(const Time &lhs, const Time &rhs);
+
 enum class LogLevel { Info, Error };
 
 class Logger {

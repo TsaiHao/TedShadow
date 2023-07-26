@@ -4,6 +4,12 @@
 
 namespace ted {
 
+struct Subtitle {
+  std::string text;
+  Time start = Time(0);
+  Time end = Time(0);
+};
+
 class SubtitleDecoder: public DecoderBase {
 public:
   explicit SubtitleDecoder(std::string mediaFile);
@@ -16,7 +22,7 @@ public:
 
   int getNextFrame(std::shared_ptr<AVFrame> &frame) override; 
 
-  int getNextSubtitle(std::shared_ptr<AVSubtitle> &subtitle);
+  int getNextSubtitle(Subtitle &subtitle);
 };
 
 }

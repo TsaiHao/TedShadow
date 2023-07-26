@@ -33,14 +33,12 @@ int SubtitleDecoder::getNextFrame(std::shared_ptr<AVFrame> &frame) {
   return 0;
 }
 
-int SubtitleDecoder::getNextSubtitle(std::shared_ptr<AVSubtitle> &subtitle) {
-  if (subtitle == nullptr) {
-    subtitle = std::shared_ptr<AVSubtitle>(
-        new AVSubtitle(), [](AVSubtitle *s) { avsubtitle_free(s); });
-  }
+int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
   int ret;
   int gotSub = 1;
+  int64_t pts = 0, duration = 0;
 
+  AVSubtitle avSub;
   do {
     do {
       ret = av_read_frame(mFormatContext, mPacket);
@@ -53,7 +51,7 @@ int SubtitleDecoder::getNextSubtitle(std::shared_ptr<AVSubtitle> &subtitle) {
       }
     } while (true);
 
-    ret = avcodec_decode_subtitle2(mCodecContext, subtitle.get(), &gotSub,
+    ret = avcodec_decode_subtitle2(mCodecContext, &avSub, &gotSub,
                                    mPacket);
     if (ret < 0) {
       logger.error("Subtitle decode failed: {}", getFFmpegErrorStr(ret));
@@ -63,7 +61,20 @@ int SubtitleDecoder::getNextSubtitle(std::shared_ptr<AVSubtitle> &subtitle) {
       logger.error("Subtitle decode failed: no subtitle in pts {}",
                    mPacket->pts);
     }
+
+    pts = mPacket->pts;
+    duration = mPacket->duration;
   } while (gotSub == 0);
+
+  if (avSub.num_rects != 1) {
+    logger.error("Subtitle decode failed: invalid subtitle rects {}",
+                 avSub.num_rects);
+    return -1;
+  }
+
+  subtitle.text = std::string(avSub.rects[0]->ass);
+  subtitle.start = Time::fromUs(pts);
+  subtitle.end = Time::fromUs(pts + duration);
 
   return 0;
 }
