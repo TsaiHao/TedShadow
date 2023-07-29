@@ -84,3 +84,6 @@ AudioParam AudioDecoder::getAudioParam() const {
 
   return param;
 }
+ted::Time AudioDecoder::convertTime(int64_t timestampUs) const {
+  return ted::Time::fromAVTime(timestampUs, mFormatContext->streams[mStreamIndex]->time_base);
+}

@@ -49,6 +49,9 @@ struct Time {
 };
 bool operator==(const Time &lhs, const Time &rhs);
 bool operator!=(const Time &lhs, const Time &rhs);
+inline auto operator<=>(const Time &lhs, const Time &rhs) {
+  return lhs.num * rhs.den <=> rhs.num * lhs.den;
+}
 
 enum class LogLevel { Info, Error };
 

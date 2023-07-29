@@ -22,6 +22,8 @@ public:
   int getNextFrame(std::shared_ptr<AVFrame>& frame) override;
 
   [[nodiscard]] AudioParam getAudioParam() const;
+
+  Time convertTime(int64_t timestampUs) const;
 };
 
 }

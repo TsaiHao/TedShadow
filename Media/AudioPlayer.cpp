@@ -50,6 +50,7 @@ void AudioPlayer::audioCallback(void *userData, Uint8 *stream, int len) {
 }
 
 int AudioPlayer::init() {
+  SDL_Init(SDL_INIT_AUDIO);
   if (mStatus != SDL_AUDIO_STOPPED) {
     logger.error("AudioPlayer is not stopped.");
     return -1;

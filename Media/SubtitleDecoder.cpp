@@ -1,12 +1,29 @@
 #include "SubtitleDecoder.h"
 #include "Utils/Utils.h"
 
+using ted::Subtitle;
+
+int Subtitle::merge(const Subtitle &next) {
+  if (next.start.us() > end.us()) {
+    return -1;
+  }
+
+  if (next.start.us() < end.us()) {
+    text += "\n";
+  }
+
+  text += next.text;
+  end = next.end;
+
+  return 0;
+}
+
 using ted::SubtitleDecoder;
 
 SubtitleDecoder::SubtitleDecoder(std::string mediaFile)
     : DecoderBase(std::move(mediaFile), AVMEDIA_TYPE_SUBTITLE) {}
 
-SubtitleDecoder::~SubtitleDecoder() {}
+SubtitleDecoder::~SubtitleDecoder() = default;
 
 int SubtitleDecoder::init() {
   int ret = DecoderBase::init();
@@ -33,6 +50,29 @@ int SubtitleDecoder::getNextFrame(std::shared_ptr<AVFrame> &frame) {
   return 0;
 }
 
+static std::string parseAssDialogue(const char *ass) {
+  std::string res;
+  int sepPos = 0;
+  int nComma = 0;
+  int len = strlen(ass);
+
+  for (int i = 0; i < len; ++i) {
+    if (ass[i] == ',') {
+      ++nComma;
+      if (nComma == 8) {
+        sepPos = i;
+        break;
+      }
+    }
+  }
+
+  if (nComma == 8) {
+    res = std::string(&ass[sepPos + 1], len - sepPos - 1);
+  }
+
+  return res;
+}
+
 int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
   int ret;
   int gotSub = 1;
@@ -51,15 +91,13 @@ int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
       }
     } while (true);
 
-    ret = avcodec_decode_subtitle2(mCodecContext, &avSub, &gotSub,
-                                   mPacket);
+    ret = avcodec_decode_subtitle2(mCodecContext, &avSub, &gotSub, mPacket);
     if (ret < 0) {
       logger.error("Subtitle decode failed: {}", getFFmpegErrorStr(ret));
       return ret;
     }
     if (gotSub == 0) {
-      logger.error("Subtitle decode failed: no subtitle in pts {}",
-                   mPacket->pts);
+      continue;
     }
 
     pts = mPacket->pts;
@@ -72,9 +110,11 @@ int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
     return -1;
   }
 
-  subtitle.text = std::string(avSub.rects[0]->ass);
+  subtitle.text = parseAssDialogue(avSub.rects[0]->ass);
   subtitle.start = Time::fromUs(pts);
   subtitle.end = Time::fromUs(pts + duration);
+
+  avsubtitle_free(&avSub);
 
   return 0;
 }

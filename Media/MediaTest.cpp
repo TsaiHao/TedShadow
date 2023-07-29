@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include <memory>
 #include <numeric>
@@ -98,6 +99,20 @@ TEST_CASE("test audio decoder", "[audio]") {
 
   REQUIRE(ret == 0);
   REQUIRE(audioFrame != nullptr);
+
+  std::shared_ptr<AVFrame> audioFrame2;
+  ret = decoder.seek(0);
+  REQUIRE(ret == 0);
+
+  ret = decoder.getNextFrame(audioFrame2);
+  REQUIRE(ret == 0);
+  REQUIRE(audioFrame2->pts == audioFrame->pts);
+
+  auto *data = (float *)audioFrame->data[0];
+  auto *data2 = (float *)audioFrame2->data[0];
+  for (int i = 0; i < 1024; ++i) {
+    REQUIRE_THAT(data[i], Catch::Matchers::WithinAbs(0.0f, 0.0001f));
+  }
 }
 
 TEST_CASE("test audio player", "[audio]") {

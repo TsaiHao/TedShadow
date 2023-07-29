@@ -8,6 +8,8 @@ struct Subtitle {
   std::string text;
   Time start = Time(0);
   Time end = Time(0);
+
+  int merge(const Subtitle& next);
 };
 
 class SubtitleDecoder: public DecoderBase {
