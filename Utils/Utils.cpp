@@ -77,6 +77,9 @@ SimpleDownloader::SimpleDownloader(std::string url, std::string localPath)
   logger.info("SimpleDownloader url: {}", mUrl);
 }
 
+SimpleDownloader::SimpleDownloader(std::string url, std::string *buffer)
+    : mUrl(std::move(url)), mBuffer(buffer) {}
+
 SimpleDownloader::~SimpleDownloader() {
   if (mCurl != nullptr) {
     curl_easy_cleanup(mCurl);
@@ -106,15 +109,19 @@ int SimpleDownloader::init() {
     return -1;
   }
 
-  mFile = fopen(mLocalPath.c_str(), "wb");
-  if (mFile == nullptr) {
-    logger.error("open file failed {}", mLocalPath);
-    return -1;
-  }
-
   curl_easy_setopt(mCurl, CURLOPT_URL, mUrl.c_str());
-  curl_easy_setopt(mCurl, CURLOPT_WRITEFUNCTION, nullptr);
-  curl_easy_setopt(mCurl, CURLOPT_WRITEDATA, mFile);
+  if (mBuffer == nullptr) {
+    mFile = fopen(mLocalPath.c_str(), "wb");
+    if (mFile == nullptr) {
+      logger.error("open file failed {}", mLocalPath);
+      return -1;
+    }
+    curl_easy_setopt(mCurl, CURLOPT_WRITEFUNCTION, nullptr);
+    curl_easy_setopt(mCurl, CURLOPT_WRITEDATA, mFile);
+  } else {
+    curl_easy_setopt(mCurl, CURLOPT_WRITEFUNCTION, WriteBufferCallback);
+    curl_easy_setopt(mCurl, CURLOPT_WRITEDATA, this);
+  }
   curl_easy_setopt(mCurl, CURLOPT_NOPROGRESS, 0L);
   curl_easy_setopt(mCurl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(mCurl, CURLOPT_FAILONERROR, 1L);
@@ -134,12 +141,26 @@ int SimpleDownloader::download() {
     logger.error("curl_easy_perform failed {}", mUrl);
     return -1;
   }
-  fclose(mFile);
+  if (mFile != nullptr) {
+    fclose(mFile);
+  }
 
   return 0;
 }
 
 std::string SimpleDownloader::getLocalPath() const { return mLocalPath; }
+
+size_t ted::SimpleDownloader::WriteBufferCallback(void *contents, size_t size,
+                                                  size_t nmemb, void *user) {
+  size_t realSize = size * nmemb;
+  auto *downloader = static_cast<SimpleDownloader *>(user);
+  if (downloader->mBuffer == nullptr) {
+    logger.error("buffer not init {}", downloader->mUrl);
+    return 0;
+  }
+  downloader->mBuffer->append(static_cast<char *>(contents), realSize);
+  return realSize;
+}
 
 std::string ted::getFFmpegErrorStr(int error) {
   std::string ret(100, '0');

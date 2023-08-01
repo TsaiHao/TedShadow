@@ -100,6 +100,8 @@ class SimpleDownloader {
 public:
   SimpleDownloader(std::string url, std::string localPath);
 
+  SimpleDownloader(std::string url, std::string* buffer);
+
   ~SimpleDownloader();
 
   int setOption(CURLoption curlOption, void *value);
@@ -111,8 +113,12 @@ public:
   [[nodiscard]] std::string getLocalPath() const;
 
 private:
+  static size_t WriteBufferCallback(void *contents, size_t size, size_t nmemb,
+                                    void *user);
+
   std::string mUrl;
   std::string mLocalPath;
+  std::string *mBuffer = nullptr;
 
   CURL *mCurl = nullptr;
   FILE *mFile = nullptr;

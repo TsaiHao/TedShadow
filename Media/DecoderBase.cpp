@@ -38,7 +38,7 @@ int DecoderBase::init() {
   int streamIndex = av_find_best_stream(mFormatContext, mMediaType, -1,
                                         -1, nullptr, 0);
   if (streamIndex < 0) {
-    logger.error("Decoder failed to find audio stream: {}, {}", mPath,
+    logger.error("Decoder failed to find stream: {}, {}", mPath,
                  TYPE_STR);
     return -1;
   }
@@ -104,6 +104,8 @@ int DecoderBase::seek(int64_t timestampUs) {
   }
 
   avcodec_flush_buffers(mCodecContext);
+  mCurrentTime = Time(timestampUs);
+
   return 0;
 }
 
@@ -152,6 +154,9 @@ int DecoderBase::decodeLoopOnce() {
     }
   } while (true);
 
+  mCurrentTime = Time::fromAVTime(mFrame->pts, mFormatContext->streams[mStreamIndex]->time_base);
   return 0;
 }
-
+ted::Time ted::DecoderBase::getCurrentTime() const {
+  return mCurrentTime;
+}

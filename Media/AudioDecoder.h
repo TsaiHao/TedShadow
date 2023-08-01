@@ -23,7 +23,7 @@ public:
 
   [[nodiscard]] AudioParam getAudioParam() const;
 
-  Time convertTime(int64_t timestampUs) const;
+  [[nodiscard]] Time convertTime(int64_t timestampUs) const;
 };
 
 }

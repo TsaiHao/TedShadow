@@ -157,3 +157,12 @@ TEST_CASE("test subtitle", "[subtitle]") {
   REQUIRE(!subtitle.text.empty());
   REQUIRE(subtitle.start != subtitle.end);
 }
+
+TEST_CASE("test ted fetch", "[downloader]") {
+  std::string buffer;
+  auto downloader = ted::SimpleDownloader(
+      "https://www.ted.com/talks/vinu_daniel_how_today_s_scraps_will_be_tomorrow_s_sustainable_buildings",
+      "./test.html");
+  REQUIRE(downloader.init() == 0);
+  REQUIRE(downloader.download() == 0);
+}

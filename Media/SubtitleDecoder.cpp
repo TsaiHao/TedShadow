@@ -27,13 +27,8 @@ SubtitleDecoder::~SubtitleDecoder() = default;
 
 int SubtitleDecoder::init() {
   int ret = DecoderBase::init();
-  if (ret < 0) {
-    logger.error("Subtitle init failed, please verify your ffmpeg supporting "
-                 "mov_text decoder");
-    return ret;
-  }
 
-  return 0;
+  return ret;
 }
 
 int SubtitleDecoder::seek(int64_t timestampUs) {
@@ -54,7 +49,7 @@ static std::string parseAssDialogue(const char *ass) {
   std::string res;
   int sepPos = 0;
   int nComma = 0;
-  int len = strlen(ass);
+  auto len = (int)strlen(ass);
 
   for (int i = 0; i < len; ++i) {
     if (ass[i] == ',') {

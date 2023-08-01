@@ -19,6 +19,8 @@ public:
 
   virtual int getNextFrame(std::shared_ptr<AVFrame> &frame) = 0;
 
+  virtual Time getCurrentTime() const;
+
 protected:
   int decodeLoopOnce();
 
@@ -31,5 +33,7 @@ protected:
 
   AVFrame *mFrame = nullptr;
   AVPacket *mPacket = nullptr;
+
+  Time mCurrentTime = Time(0);
 };
 }
