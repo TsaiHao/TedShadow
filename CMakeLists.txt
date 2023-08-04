@@ -28,7 +28,10 @@ target_sources(TedShadow PRIVATE
     ${IMGUI_SOURCES}
 )
 
-set(UTILS_SOURCES Utils/Utils.cpp)
+set(UTILS_SOURCES
+    Utils/Utils.cpp
+    Utils/HLS.cpp
+)
 target_sources(TedShadow PRIVATE
     ${UTILS_SOURCES}
 )

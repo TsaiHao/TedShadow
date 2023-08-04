@@ -122,7 +122,7 @@ int SimpleDownloader::init() {
     curl_easy_setopt(mCurl, CURLOPT_WRITEFUNCTION, WriteBufferCallback);
     curl_easy_setopt(mCurl, CURLOPT_WRITEDATA, this);
   }
-  curl_easy_setopt(mCurl, CURLOPT_NOPROGRESS, 0L);
+  curl_easy_setopt(mCurl, CURLOPT_NOPROGRESS, 1L);
   curl_easy_setopt(mCurl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(mCurl, CURLOPT_FAILONERROR, 1L);
   // curl_easy_setopt(mCurl, CURLOPT_PROXY, "http://127.0.0.1:7890");

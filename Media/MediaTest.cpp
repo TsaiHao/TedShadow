@@ -3,6 +3,9 @@
 
 #include <memory>
 #include <numeric>
+#include <regex>
+#include <sstream>
+#include <fstream>
 #include <string>
 
 #include <sys/stat.h>
@@ -11,9 +14,8 @@
 #include "AudioDecoder.h"
 #include "AudioPlayer.h"
 #include "SubtitleDecoder.h"
+#include "Utils/HLS.h"
 #include "Utils/Utils.h"
-
-#include <sstream>
 
 TEST_CASE("logger output", "[logger]") {
   std::stringstream ss;
@@ -158,11 +160,47 @@ TEST_CASE("test subtitle", "[subtitle]") {
   REQUIRE(subtitle.start != subtitle.end);
 }
 
+static std::string talkUrl =
+    "https://www.ted.com/talks/"
+    "maya_shankar_why_change_is_so_scary_and_how_to_unlock_its_potential";
+
 TEST_CASE("test ted fetch", "[downloader]") {
   std::string buffer;
-  auto downloader = ted::SimpleDownloader(
-      "https://www.ted.com/talks/vinu_daniel_how_today_s_scraps_will_be_tomorrow_s_sustainable_buildings",
-      "./test.html");
+  auto downloader = ted::SimpleDownloader(talkUrl, "./test.html");
   REQUIRE(downloader.init() == 0);
   REQUIRE(downloader.download() == 0);
+}
+
+TEST_CASE("test ffmpeg hls downloader", "[hls]") {
+  std::string buffer;
+  auto downloader = ted::SimpleDownloader(talkUrl, &buffer);
+  REQUIRE(downloader.init() == 0);
+  REQUIRE(downloader.download() == 0);
+  std::regex pattern(
+      R"(<script id="__NEXT_DATA__" type="application/json">(.*?)</script>)");
+
+  std::smatch match;
+  REQUIRE(std::regex_search(buffer, match, pattern));
+  REQUIRE(match.size() == 2);
+
+  auto json = nlohmann::json::parse(match[1].str());
+  REQUIRE(!json.empty());
+  auto videoData = json["props"]["pageProps"]["videoData"];
+  REQUIRE(!videoData.empty());
+  auto playerData = videoData["playerData"];
+  REQUIRE(!playerData.empty());
+  REQUIRE(playerData.is_string());
+  auto playerDataJson = nlohmann::json::parse(playerData.get<std::string>());
+  REQUIRE(!playerDataJson.empty());
+
+  auto m3u8Json = playerDataJson["resources"]["hls"]["stream"];
+  REQUIRE(!m3u8Json.empty());
+  REQUIRE(m3u8Json.is_string());
+
+  auto m3u8Url = m3u8Json.get<std::string>();
+  ted::HLSParser parser(m3u8Url);
+  REQUIRE(parser.init() == 0);
+  auto playlist = parser.getPlayList();
+  REQUIRE(!playlist.empty());
+  REQUIRE(parser.downloadAudioByName("medium", "./m3u8.mp3") == 0);
 }

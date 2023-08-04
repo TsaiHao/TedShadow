@@ -4,6 +4,7 @@
 #include <string>
 
 #include <curl/curl.h>
+#include "json.hpp"
 
 #ifdef __cpp_lib_format
 using std::format;
