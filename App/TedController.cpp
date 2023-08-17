@@ -9,7 +9,7 @@ using ted::logger;
 
 [[maybe_unused]] static std::vector<ted::Subtitle>
 retrieveAllSubtitlesFromAss(const std::string &mediaFile) {
-  ted::MediaSubtitleDecoder subtitleDecoder(mediaFile);
+  ted::SubtitleDecoder subtitleDecoder(mediaFile);
 
   int ret;
   ret = subtitleDecoder.init();
@@ -65,7 +65,7 @@ static std::vector<ted::Subtitle> fetchTedTalk(const std::string &url) {
   std::vector<ted::Subtitle> subtitles =
       ted::retrieveSubtitlesFromTranscript(html);
 
-  return subtitles;
+  return ted::mergeSubtitles(subtitles);
 }
 
 TedController::TedController(std::string url)

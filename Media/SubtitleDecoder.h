@@ -9,14 +9,14 @@ struct Subtitle {
   Time start = Time(0);
   Time end = Time(0);
 
-  int merge(const Subtitle& next);
+  Subtitle& merge(const Subtitle& next);
 };
 
-class MediaSubtitleDecoder : public DecoderBase {
+class SubtitleDecoder : public DecoderBase {
 public:
-  explicit MediaSubtitleDecoder(std::string mediaFile);
+  explicit SubtitleDecoder(std::string mediaFile);
 
-  ~MediaSubtitleDecoder() override;
+  ~SubtitleDecoder() override;
 
   int init() override;
 
@@ -28,4 +28,6 @@ public:
 };
 
 std::vector<Subtitle> retrieveSubtitlesFromTranscript(const std::string& html);
+
+std::vector<Subtitle> mergeSubtitles(const std::vector<Subtitle> &subtitles);
 }

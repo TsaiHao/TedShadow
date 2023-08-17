@@ -31,13 +31,6 @@ using ted::HLSParser;
 
 HLSParser::HLSParser(std::string url) : mUrl(std::move(url)) {}
 
-static std::string trim(std::string_view str) {
-  size_t first =
-      std::max(str.find_first_not_of(' '), str.find_first_not_of('\"'));
-  size_t last = std::min(str.find_last_not_of(' '), str.find_last_not_of('\"'));
-  return std::string(str.substr(first, (last - first + 1)));
-}
-
 int HLSParser::init() {
   SimpleDownloader downloader(mUrl, &mPlayList);
 
@@ -110,7 +103,7 @@ int HLSParser::init() {
           }
         }
         if (key == "URI") {
-          item.url = urlBase + trim(value);
+          item.url = urlBase + std::string(trim(value));
         } else if (key == "NAME") {
           item.name = trim(value);
         }

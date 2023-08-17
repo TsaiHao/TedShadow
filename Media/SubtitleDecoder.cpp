@@ -1,42 +1,44 @@
-#include "MediaSubtitleDecoder.h"
+#include "SubtitleDecoder.h"
 #include "Utils/Utils.h"
 #include <regex>
 
 using ted::Subtitle;
 
-int Subtitle::merge(const Subtitle &next) {
-  if (next.start.us() > end.us()) {
-    return -1;
+Subtitle& Subtitle::merge(const Subtitle &next) {
+  if (text.empty() && start == Time(0) && end == Time(0)) {
+    text = next.text;
+    start = next.start;
+    end = next.end;
+    return *this;
   }
 
-  if (next.start.us() < end.us()) {
-    text += "\n";
+  if (!text.empty() && text.back() != ' ' && next.text.front() != ' ') {
+    text += ' ';
   }
-
   text += next.text;
   end = next.end;
 
-  return 0;
+  return *this;
 }
 
-using ted::MediaSubtitleDecoder;
+using ted::SubtitleDecoder;
 
-MediaSubtitleDecoder::MediaSubtitleDecoder(std::string mediaFile)
+SubtitleDecoder::SubtitleDecoder(std::string mediaFile)
     : DecoderBase(std::move(mediaFile), AVMEDIA_TYPE_SUBTITLE) {}
 
-MediaSubtitleDecoder::~MediaSubtitleDecoder() = default;
+SubtitleDecoder::~SubtitleDecoder() = default;
 
-int MediaSubtitleDecoder::init() {
+int SubtitleDecoder::init() {
   int ret = DecoderBase::init();
 
   return ret;
 }
 
-int MediaSubtitleDecoder::seek(int64_t timestampUs) {
+int SubtitleDecoder::seek(int64_t timestampUs) {
   return DecoderBase::seek(timestampUs);
 }
 
-int MediaSubtitleDecoder::getNextFrame(std::shared_ptr<AVFrame> &frame) {
+int SubtitleDecoder::getNextFrame(std::shared_ptr<AVFrame> &frame) {
   int ret = decodeLoopOnce();
   if (ret != 0) {
     return ret;
@@ -69,7 +71,7 @@ static std::string parseAssDialogue(const char *ass) {
   return res;
 }
 
-int MediaSubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
+int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
   int ret;
   int gotSub = 1;
   int64_t pts = 0, duration = 0;
@@ -155,7 +157,7 @@ ted::retrieveSubtitlesFromTranscript(const std::string &html) {
         continue;
       }
 
-      replaceAll(text, "\\n", ", ");
+      replaceAll(text, "\n", " ");
       subtitles.emplace_back(Subtitle{
           .text = std::move(text),
           .start = Time::fromMs(timestamp),
@@ -170,4 +172,29 @@ ted::retrieveSubtitlesFromTranscript(const std::string &html) {
   }
 
   return subtitles;
+}
+
+std::vector<Subtitle> ted::mergeSubtitles(const std::vector<Subtitle> &subtitles) {
+  static std::string endOfSentence = ".?!";
+  std::vector<Subtitle> merged;
+  Subtitle sentence;
+
+  for (const auto & subtitle : subtitles) {
+    std::string_view text = subtitle.text;
+    text = trim(text);
+    if (text.empty()) {
+      continue;
+    }
+
+    sentence.merge(subtitle);
+    for (auto &&c : endOfSentence) {
+      if (text.back() == c) {
+        merged.emplace_back(std::move(sentence));
+        sentence = Subtitle();
+        break;
+      }
+    }
+  }
+
+  return merged;
 }

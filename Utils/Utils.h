@@ -129,6 +129,8 @@ std::string getFFmpegErrorStr(int error);
 
 std::string replaceAll(std::string& str, const std::string& from, const std::string& to);
 
+std::string_view trim(std::string_view sv);
+
 #pragma mark media utils
 
 AVFrame *interleaveSamples(AVFrame *frame);

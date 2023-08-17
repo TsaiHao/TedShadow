@@ -209,3 +209,13 @@ std::string ted::replaceAll(std::string &str, const std::string &from,
   }
   return str;
 }
+
+std::string_view ted::trim(std::string_view sv) {
+  static const char* whitespace = " \t\n\r\f\v";
+  size_t start = sv.find_first_not_of(whitespace);
+  if (start == std::string_view::npos) {
+    return {}; // The string_view only contains whitespace
+  }
+  size_t end = sv.find_last_not_of(whitespace);
+  return sv.substr(start, end - start + 1);
+}

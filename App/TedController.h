@@ -5,7 +5,7 @@
 
 #include "Media/AudioDecoder.h"
 #include "Media/AudioPlayer.h"
-#include "Media/MediaSubtitleDecoder.h"
+#include "Media/SubtitleDecoder.h"
 #include "Utils/Utils.h"
 
 class TedController {

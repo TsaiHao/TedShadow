@@ -13,7 +13,7 @@
 
 #include "AudioDecoder.h"
 #include "AudioPlayer.h"
-#include "MediaSubtitleDecoder.h"
+#include "SubtitleDecoder.h"
 #include "Utils/HLS.h"
 #include "Utils/Utils.h"
 
@@ -149,7 +149,7 @@ TEST_CASE("test audio player", "[audio]") {
 TEST_CASE("test subtitle", "[subtitle]") {
   DOWNLOAD_TEST_VIDEO
 
-  ted::MediaSubtitleDecoder decoder(local);
+  ted::SubtitleDecoder decoder(local);
   REQUIRE(decoder.init() == 0);
 
   ted::Subtitle subtitle;
