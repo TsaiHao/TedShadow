@@ -15,7 +15,7 @@ public:
   AudioPlayer();
   ~AudioPlayer();
 
-  int init();
+  int init(AudioParam param);
 
   int play();
 
@@ -37,6 +37,9 @@ private:
   SDL_AudioSpec mSpec {};
 
   SDL_AudioStatus mStatus = SDL_AUDIO_STOPPED;
+
+  AudioParam mSourceFormat;
+  int mElementSize = 4; // sizeof(float)
 
   std::mutex mBufferMutex;
   std::condition_variable mBufferCond;

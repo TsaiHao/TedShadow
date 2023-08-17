@@ -50,6 +50,7 @@ target_sources(TedShadow PRIVATE
 
 set(APP_SOURCES
     App/TedShadow.cpp
+    App/TedController.cpp
 )
 target_sources(TedShadow PRIVATE
     ${APP_SOURCES}

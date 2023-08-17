@@ -95,8 +95,6 @@ struct AudioParam {
   AudioFormat sampleFormat = AudioFormat::Float32;
 };
 
-AVFrame *interleaveSamples(AVFrame *frame);
-
 class SimpleDownloader {
 public:
   SimpleDownloader(std::string url, std::string localPath);
@@ -125,6 +123,15 @@ private:
   FILE *mFile = nullptr;
 };
 
+#pragma mark string utils
+
 std::string getFFmpegErrorStr(int error);
 
+std::string replaceAll(std::string& str, const std::string& from, const std::string& to);
+
+#pragma mark media utils
+
+AVFrame *interleaveSamples(AVFrame *frame);
+
+std::string retrieveM3U8UrlFromTalkHtml(const std::string &html);
 } // namespace ted

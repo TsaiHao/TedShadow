@@ -15,26 +15,24 @@ void AudioPlayer::audioCallback(void *userData, Uint8 *stream, int len) {
   auto player = static_cast<AudioPlayer *>(userData);
   auto &buffer = player->mAudioBuffer;
 
-  int needSample = len / sizeof(float) / player->mSpec.channels;
+  int needSample = len / player->mElementSize / player->mSpec.channels;
   size_t dstOffset = 0;
 
   std::unique_lock lock(player->mBufferMutex);
   while (needSample > 0 && !buffer.empty()) {
     auto &cache = buffer.front();
     auto frame = cache.frame;
-    assert(frame->format == AV_SAMPLE_FMT_FLT &&
-           frame->ch_layout.nb_channels == 2);
     auto &progress = cache.progress;
-    size_t srcOffset = progress * sizeof(float) * player->mSpec.channels;
+    size_t srcOffset = progress * player->mElementSize * player->mSpec.channels;
 
     size_t copySize = std::min(
-        (frame->nb_samples - progress) * sizeof(float) * player->mSpec.channels,
-        needSample * sizeof(float) * player->mSpec.channels);
+        (frame->nb_samples - progress) * player->mElementSize * player->mSpec.channels,
+        needSample * player->mElementSize * player->mSpec.channels);
 
     memcpy(stream + dstOffset, frame->data[0] + srcOffset, copySize);
     dstOffset += copySize;
-    needSample -= copySize / sizeof(float) / player->mSpec.channels;
-    progress += copySize / sizeof(float) / player->mSpec.channels;
+    needSample -= copySize / player->mElementSize / player->mSpec.channels;
+    progress += copySize / player->mElementSize / player->mSpec.channels;
 
     if (progress == frame->nb_samples) {
       buffer.pop_front();
@@ -45,11 +43,13 @@ void AudioPlayer::audioCallback(void *userData, Uint8 *stream, int len) {
   lock.unlock();
   if (needSample > 0) {
     memset(stream + dstOffset, 0,
-           needSample * sizeof(float) * player->mSpec.channels);
+           needSample * player->mElementSize * player->mSpec.channels);
   }
 }
 
-int AudioPlayer::init() {
+int AudioPlayer::init(AudioParam param) {
+  mSourceFormat = param;
+
   SDL_Init(SDL_INIT_AUDIO);
   if (mStatus != SDL_AUDIO_STOPPED) {
     logger.error("AudioPlayer is not stopped.");
@@ -58,9 +58,20 @@ int AudioPlayer::init() {
 
   SDL_AudioSpec want, have;
   SDL_zero(want);
-  want.freq = 48000;
-  want.format = AUDIO_F32;
-  want.channels = 2;
+  want.freq = mSourceFormat.sampleRate;
+  switch (mSourceFormat.sampleFormat) {
+  case AudioFormat::Float32:
+    want.format = AUDIO_F32;
+    mElementSize = 4;
+    break;
+  case AudioFormat::Int16:
+    want.format = AUDIO_S16;
+    mElementSize = 2;
+    break;
+  default:
+    throw std::runtime_error("unsupported audio format");
+  }
+  want.channels = mSourceFormat.channels;
   want.samples = AUDIO_CALLBACK_SIZE;
   want.callback = audioCallback;
   want.userdata = this;

@@ -1,11 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <fstream>
 #include <memory>
 #include <numeric>
 #include <regex>
 #include <sstream>
-#include <fstream>
 #include <string>
 
 #include <sys/stat.h>
@@ -13,7 +13,7 @@
 
 #include "AudioDecoder.h"
 #include "AudioPlayer.h"
-#include "SubtitleDecoder.h"
+#include "MediaSubtitleDecoder.h"
 #include "Utils/HLS.h"
 #include "Utils/Utils.h"
 
@@ -149,7 +149,7 @@ TEST_CASE("test audio player", "[audio]") {
 TEST_CASE("test subtitle", "[subtitle]") {
   DOWNLOAD_TEST_VIDEO
 
-  ted::SubtitleDecoder decoder(local);
+  ted::MediaSubtitleDecoder decoder(local);
   REQUIRE(decoder.init() == 0);
 
   ted::Subtitle subtitle;
@@ -162,7 +162,7 @@ TEST_CASE("test subtitle", "[subtitle]") {
 
 static std::string talkUrl =
     "https://www.ted.com/talks/"
-    "maya_shankar_why_change_is_so_scary_and_how_to_unlock_its_potential";
+    "francis_de_los_reyes_how_the_water_you_flush_becomes_the_water_you_drink";
 
 TEST_CASE("test ted fetch", "[downloader]") {
   std::string buffer;
@@ -172,32 +172,8 @@ TEST_CASE("test ted fetch", "[downloader]") {
 }
 
 TEST_CASE("test ffmpeg hls downloader", "[hls]") {
-  std::string buffer;
-  auto downloader = ted::SimpleDownloader(talkUrl, &buffer);
-  REQUIRE(downloader.init() == 0);
-  REQUIRE(downloader.download() == 0);
-  std::regex pattern(
-      R"(<script id="__NEXT_DATA__" type="application/json">(.*?)</script>)");
+  auto m3u8Url = ted::retrieveM3U8UrlFromTalkHtml(talkUrl);
 
-  std::smatch match;
-  REQUIRE(std::regex_search(buffer, match, pattern));
-  REQUIRE(match.size() == 2);
-
-  auto json = nlohmann::json::parse(match[1].str());
-  REQUIRE(!json.empty());
-  auto videoData = json["props"]["pageProps"]["videoData"];
-  REQUIRE(!videoData.empty());
-  auto playerData = videoData["playerData"];
-  REQUIRE(!playerData.empty());
-  REQUIRE(playerData.is_string());
-  auto playerDataJson = nlohmann::json::parse(playerData.get<std::string>());
-  REQUIRE(!playerDataJson.empty());
-
-  auto m3u8Json = playerDataJson["resources"]["hls"]["stream"];
-  REQUIRE(!m3u8Json.empty());
-  REQUIRE(m3u8Json.is_string());
-
-  auto m3u8Url = m3u8Json.get<std::string>();
   ted::HLSParser parser(m3u8Url);
   REQUIRE(parser.init() == 0);
   auto playlist = parser.getPlayList();

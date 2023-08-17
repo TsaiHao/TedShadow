@@ -1,5 +1,6 @@
-#include "SubtitleDecoder.h"
+#include "MediaSubtitleDecoder.h"
 #include "Utils/Utils.h"
+#include <regex>
 
 using ted::Subtitle;
 
@@ -18,24 +19,24 @@ int Subtitle::merge(const Subtitle &next) {
   return 0;
 }
 
-using ted::SubtitleDecoder;
+using ted::MediaSubtitleDecoder;
 
-SubtitleDecoder::SubtitleDecoder(std::string mediaFile)
+MediaSubtitleDecoder::MediaSubtitleDecoder(std::string mediaFile)
     : DecoderBase(std::move(mediaFile), AVMEDIA_TYPE_SUBTITLE) {}
 
-SubtitleDecoder::~SubtitleDecoder() = default;
+MediaSubtitleDecoder::~MediaSubtitleDecoder() = default;
 
-int SubtitleDecoder::init() {
+int MediaSubtitleDecoder::init() {
   int ret = DecoderBase::init();
 
   return ret;
 }
 
-int SubtitleDecoder::seek(int64_t timestampUs) {
+int MediaSubtitleDecoder::seek(int64_t timestampUs) {
   return DecoderBase::seek(timestampUs);
 }
 
-int SubtitleDecoder::getNextFrame(std::shared_ptr<AVFrame> &frame) {
+int MediaSubtitleDecoder::getNextFrame(std::shared_ptr<AVFrame> &frame) {
   int ret = decodeLoopOnce();
   if (ret != 0) {
     return ret;
@@ -68,7 +69,7 @@ static std::string parseAssDialogue(const char *ass) {
   return res;
 }
 
-int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
+int MediaSubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
   int ret;
   int gotSub = 1;
   int64_t pts = 0, duration = 0;
@@ -112,4 +113,61 @@ int SubtitleDecoder::getNextSubtitle(Subtitle &subtitle) {
   avsubtitle_free(&avSub);
 
   return 0;
+}
+
+std::vector<Subtitle>
+ted::retrieveSubtitlesFromTranscript(const std::string &html) {
+  static std::regex pattern(
+      R"(<script id="__NEXT_DATA__" type="application/json">(.*?)</script>)");
+
+  std::smatch match;
+  std::regex_search(html, match, pattern);
+  if (match.size() != 2) {
+    throw std::runtime_error("regex search failed");
+  }
+
+  auto json = nlohmann::json::parse(match[1].str());
+  auto paragraphs =
+      json["props"]["pageProps"]["transcriptData"]["translation"]["paragraphs"];
+  assert(paragraphs.is_array());
+
+  logger.info("Html subtitle parsed, {} paragraphs got", paragraphs.size());
+
+  std::vector<Subtitle> subtitles;
+
+  for (auto &&para : paragraphs) {
+    if (para["__typename"] != "Paragraph") {
+      continue;
+    }
+    auto &cues = para["cues"];
+    for (auto &&cue : cues) {
+      if (cue["__typename"] != "Cue") {
+        continue;
+      }
+
+      auto text = cue["text"].get<std::string>();
+      auto timestamp = cue["time"].get<int64_t>();
+      if (!subtitles.empty()) {
+        subtitles.back().end = Time::fromMs(timestamp);
+      }
+
+      if (text.empty() || text.starts_with('(') || timestamp < 0) {
+        continue;
+      }
+
+      replaceAll(text, "\\n", ", ");
+      subtitles.emplace_back(Subtitle{
+          .text = std::move(text),
+          .start = Time::fromMs(timestamp),
+      });
+    }
+  }
+
+  assert(!subtitles.empty() && "no subtitles found");
+  if (subtitles.back().end == Time::fromMs(0)) {
+    auto duration = json["props"]["pageProps"]["videoData"]["duration"];
+    subtitles.back().end = Time::fromS(duration.get<int>());
+  }
+
+  return subtitles;
 }

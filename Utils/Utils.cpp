@@ -2,6 +2,7 @@
 #include <curl/curl.h>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <vector>
 
 #include "Utils.h"
@@ -46,23 +47,36 @@ AVFrame *ted::interleaveSamples(AVFrame *srcFrame) {
   dstFrame->nb_samples = nSample;
   dstFrame->ch_layout = srcFrame->ch_layout;
 
-  dstFrame->format = AV_SAMPLE_FMT_FLT;
-  dstFrame->data[0] = (uint8_t *)av_malloc(nSample * nChannel * sizeof(float));
-  dstFrame->linesize[0] = nSample * nChannel * sizeof(float);
-
   if (srcFrame->format == AV_SAMPLE_FMT_FLT) {
-    // already interleaved
+    dstFrame->linesize[0] = nSample * nChannel * sizeof(float);
+    dstFrame->data[0] = (uint8_t*)av_malloc(dstFrame->linesize[0]);
     memcpy(dstFrame->data[0], srcFrame->data[0],
            nSample * nChannel * sizeof(float));
     return dstFrame;
   } else if (srcFrame->format == AV_SAMPLE_FMT_FLTP) {
-    // interleave data to dst
+    dstFrame->linesize[0] = nSample * nChannel * sizeof(float);
+    dstFrame->data[0] = (uint8_t*)av_malloc(dstFrame->linesize[0]);
     for (int i = 0; i < nSample; i++) {
       for (int j = 0; j < nChannel; j++) {
         ((float *)dstFrame->data[0])[i * nChannel + j] =
             ((float *)srcFrame->data[j])[i];
       }
     }
+  } else if (srcFrame->format == AV_SAMPLE_FMT_S16) {
+    dstFrame->linesize[0] = nSample * nChannel * 16;
+    dstFrame->data[0] = (uint8_t*)av_malloc(dstFrame->linesize[0]);
+    memcpy(dstFrame->data[0], srcFrame->data[0], nSample * nChannel * 16);
+    dstFrame->format = AV_SAMPLE_FMT_S16;
+  } else if (srcFrame->format == AV_SAMPLE_FMT_S16P) {
+    dstFrame->linesize[0] = nSample * nChannel * 16;
+    dstFrame->data[0] = (uint8_t*)av_malloc(dstFrame->linesize[0]);
+    for (int i = 0; i < nSample; i++) {
+      for (int j = 0; j < nChannel; j++) {
+        ((float *)dstFrame->data[0])[i * nChannel + j] =
+            ((int16_t *)srcFrame->data[j])[i] / 32768.0f;
+      }
+    }
+    dstFrame->format = AV_SAMPLE_FMT_S16;
   } else {
     assert(false && "unsupported format");
   }
@@ -166,4 +180,32 @@ std::string ted::getFFmpegErrorStr(int error) {
   std::string ret(100, '0');
   av_strerror(error, ret.data(), ret.size());
   return ret;
+}
+
+std::string ted::retrieveM3U8UrlFromTalkHtml(const std::string &html) {
+  static std::regex pattern(
+      R"(<script id="__NEXT_DATA__" type="application/json">(.*?)</script>)");
+
+  std::smatch match;
+  std::regex_search(html, match, pattern);
+  if (match.size() != 2) {
+    throw std::runtime_error("regex search failed");
+  }
+
+  auto json = nlohmann::json::parse(match[1].str());
+  auto player = json["props"]["pageProps"]["videoData"]["playerData"];
+  auto playerJson = nlohmann::json::parse(player.get<std::string>());
+
+  auto m3u8 = playerJson["resources"]["hls"]["stream"];
+  return m3u8.get<std::string>();
+}
+
+std::string ted::replaceAll(std::string &str, const std::string &from,
+                            const std::string &to) {
+  size_t startPos = 0;
+  while ((startPos = str.find(from, startPos)) != std::string::npos) {
+    str.replace(startPos, from.length(), to);
+    startPos += to.length();
+  }
+  return str;
 }
