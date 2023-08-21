@@ -34,6 +34,7 @@ private:
 
   std::string mUrl;
   std::string mMediaFile;
+  std::string mSubtitleFile;
 
   ted::AudioPlayer mPlayer;
   std::unique_ptr<ted::AudioDecoder> mAudioDecoder;

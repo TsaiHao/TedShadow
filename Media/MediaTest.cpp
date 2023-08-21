@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_vector.hpp>
 
 #include <fstream>
 #include <memory>
@@ -126,7 +127,7 @@ TEST_CASE("test audio player", "[audio]") {
   REQUIRE(decoder.init() == 0);
 
   auto audioPlayer = ted::AudioPlayer();
-  REQUIRE(audioPlayer.init() == 0);
+  REQUIRE(audioPlayer.init(decoder.getAudioParam()) == 0);
 
   ted::logger.info("start playing 20 seconds sound");
 
@@ -179,4 +180,26 @@ TEST_CASE("test ffmpeg hls downloader", "[hls]") {
   auto playlist = parser.getPlayList();
   REQUIRE(!playlist.empty());
   REQUIRE(parser.downloadAudioByName("medium", "./m3u8.mp3") == 0);
+}
+
+TEST_CASE("test subtitle serializer", "[subtitle]") {
+  std::string buffer;
+  auto downloader = ted::SimpleDownloader(talkUrl, &buffer);
+  REQUIRE(downloader.init() == 0);
+  REQUIRE(downloader.download() == 0);
+
+  auto subtitles = ted::retrieveSubtitlesFromTranscript(buffer);
+  REQUIRE(!subtitles.empty());
+
+  std::vector<std::string> lines;
+  for (auto& subtitle : subtitles) {
+    lines.push_back(subtitle.toString());
+  }
+
+  std::vector<ted::Subtitle> subtitles2;
+  for (auto& line : lines) {
+    subtitles2.push_back(ted::Subtitle::fromString(line));
+  }
+
+  REQUIRE_THAT(subtitles2, Catch::Matchers::Equals(subtitles));
 }

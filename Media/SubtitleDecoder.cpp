@@ -4,7 +4,7 @@
 
 using ted::Subtitle;
 
-Subtitle& Subtitle::merge(const Subtitle &next) {
+Subtitle &Subtitle::merge(const Subtitle &next) {
   if (text.empty() && start == Time(0) && end == Time(0)) {
     text = next.text;
     start = next.start;
@@ -19,6 +19,47 @@ Subtitle& Subtitle::merge(const Subtitle &next) {
   end = next.end;
 
   return *this;
+}
+
+std::string Subtitle::toString() const {
+  auto str = format("ted::Subtitle{{text: #{}#, start: {}/{}, end: {}/{}}}", text,
+                    start.num, start.den, end.num, end.den);
+  return str;
+}
+
+Subtitle Subtitle::fromString(const std::string &str) {
+  Subtitle subtitle;
+  std::string_view sv = str;
+  if (!sv.starts_with("ted::Subtitle{") || !sv.ends_with("}")) {
+    return subtitle;
+  }
+  sv.remove_prefix(strlen("ted::Subtitle{"));
+
+  sv.remove_prefix(strlen("text: #"));
+  auto pos = sv.find('#');
+  subtitle.text = std::string(sv.substr(0, pos));
+
+  sv.remove_prefix(pos + 1 + strlen(", start: "));
+  pos = sv.find('/');
+  subtitle.start.num = std::stoi(std::string(sv.substr(0, pos)));
+
+  sv.remove_prefix(pos + 1);
+  pos = sv.find(',');
+  subtitle.start.den = std::stoi(std::string(sv.substr(0, pos)));
+
+  sv.remove_prefix(pos + 1 + strlen(" end: "));
+  pos = sv.find('/');
+  subtitle.end.num = std::stoi(std::string(sv.substr(0, pos)));
+
+  sv.remove_prefix(pos + 1);
+  pos = sv.find('}');
+  subtitle.end.den = std::stoi(std::string(sv.substr(0, pos)));
+
+  return subtitle;
+}
+
+bool ted::operator==(const Subtitle& lhs, const Subtitle& rhs) {
+  return lhs.text == rhs.text && lhs.start == rhs.start && lhs.end == rhs.end;
 }
 
 using ted::SubtitleDecoder;
@@ -174,12 +215,13 @@ ted::retrieveSubtitlesFromTranscript(const std::string &html) {
   return subtitles;
 }
 
-std::vector<Subtitle> ted::mergeSubtitles(const std::vector<Subtitle> &subtitles) {
+std::vector<Subtitle>
+ted::mergeSubtitles(const std::vector<Subtitle> &subtitles) {
   static std::string endOfSentence = ".?!";
   std::vector<Subtitle> merged;
   Subtitle sentence;
 
-  for (const auto & subtitle : subtitles) {
+  for (const auto &subtitle : subtitles) {
     std::string_view text = subtitle.text;
     text = trim(text);
     if (text.empty()) {

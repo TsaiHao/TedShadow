@@ -10,7 +10,11 @@ struct Subtitle {
   Time end = Time(0);
 
   Subtitle& merge(const Subtitle& next);
+
+  [[nodiscard]] std::string toString() const;
+  static Subtitle fromString(const std::string& str);
 };
+bool operator==(const Subtitle& lhs, const Subtitle& rhs);
 
 class SubtitleDecoder : public DecoderBase {
 public:

@@ -12,6 +12,7 @@
 #include "Imgui/imgui_impl_opengl3.h"
 #include "Imgui/imgui_impl_sdl2.h"
 
+#define MEDIA_FILE_SUFFIX ".wav"
 using ted::logger;
 
 [[maybe_unused]] static std::vector<ted::Subtitle>
@@ -42,11 +43,15 @@ retrieveAllSubtitlesFromAss(const std::string &mediaFile) {
 
 static const char *CacheDir = "./.cacheMedias";
 
+static inline bool exists(const std::string &path) {
+  return access(path.c_str(), F_OK) == 0;
+}
+
 static inline std::string getCacheFile(const std::string &url) {
   auto file = std::hash<std::string>{}(url);
   std::stringstream ss;
   ss << std::hex;
-  ss << CacheDir << "/" << file << ".wav";
+  ss << CacheDir << "/" << file;
   return ss.str();
 }
 
@@ -68,10 +73,14 @@ void TedController::GlobalInit() {
 }
 
 TedController::TedController(std::string url)
-    : mUrl(std::move(url)), mMediaFile(getCacheFile(mUrl)),
-      mThreadPool(ThreadPool(4)) {
-  if (access(CacheDir, F_OK) != 0) {
+    : mUrl(std::move(url)),
+      mMediaFile(getCacheFile(mUrl) + "/audio" + MEDIA_FILE_SUFFIX),
+      mSubtitleFile(getCacheFile(mUrl) + "/subtitle.txt"), mThreadPool(4) {
+  if (!exists(CacheDir)) {
     mkdir(CacheDir, 0777);
+  }
+  if (!exists(getCacheFile(mUrl))) {
+    mkdir(getCacheFile(mUrl).c_str(), 0777);
   }
   fetchTedTalk();
 
@@ -210,13 +219,15 @@ void TedController::runImpl() {
 
 void TedController::fetchTedTalk() {
   std::string html;
-  ted::SimpleDownloader downloader(mUrl, &html);
-  downloader.init();
-  downloader.download();
 
   auto cacheFile = getCacheFile(mUrl);
-  std::optional<std::future<void>> audioDownload;
-  if (access(cacheFile.c_str(), F_OK) != 0) {
+  std::optional<std::future<void>> audioDownload, subtitleDownload;
+  if (!exists(mMediaFile) || !exists(mSubtitleFile)) {
+    ted::SimpleDownloader downloader(mUrl, &html);
+    downloader.init();
+    downloader.download();
+  }
+  if (!exists(mMediaFile)) {
     audioDownload = mThreadPool.enqueue([this, &html]() {
       auto m3u8 = ted::retrieveM3U8UrlFromTalkHtml(html);
       logger.info("fetching media resources from {}", m3u8);
@@ -230,13 +241,29 @@ void TedController::fetchTedTalk() {
     });
   }
 
-  auto subtitleDownload = mThreadPool.enqueue([this, &html]() {
-    auto subtitles = ted::retrieveSubtitlesFromTranscript(html);
-    mSubtitles = ted::mergeSubtitles(subtitles);
-  });
+  if (!exists(mSubtitleFile)) {
+    subtitleDownload = mThreadPool.enqueue([this, &html]() {
+      auto subtitles = ted::retrieveSubtitlesFromTranscript(html);
+      mSubtitles = ted::mergeSubtitles(subtitles);
+      std::ofstream subtitleFile(mSubtitleFile);
+      for (auto &&subtitle : subtitles) {
+        subtitleFile << subtitle.toString() << "\n";
+      }
+    });
+  } else {
+    subtitleDownload = mThreadPool.enqueue([this]() {
+      std::ifstream subtitleFile(mSubtitleFile);
+      std::string line;
+      while (std::getline(subtitleFile, line)) {
+        mSubtitles.emplace_back(ted::Subtitle::fromString(line));
+      }
+    });
+  }
 
   if (audioDownload) {
     audioDownload->wait();
   }
-  subtitleDownload.wait();
+  if (subtitleDownload) {
+    subtitleDownload->wait();
+  }
 }

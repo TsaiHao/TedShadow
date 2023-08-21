@@ -31,6 +31,16 @@ using ted::HLSParser;
 
 HLSParser::HLSParser(std::string url) : mUrl(std::move(url)) {}
 
+static std::string_view removeQuotes(std::string_view str) {
+  if (str.starts_with('\"')) {
+    str.remove_prefix(1);
+  }
+  if (str.ends_with('\"')) {
+    str.remove_suffix(1);
+  }
+  return str;
+}
+
 int HLSParser::init() {
   SimpleDownloader downloader(mUrl, &mPlayList);
 
@@ -103,9 +113,9 @@ int HLSParser::init() {
           }
         }
         if (key == "URI") {
-          item.url = urlBase + std::string(trim(value));
+          item.url = urlBase + std::string(removeQuotes(trim(value)));
         } else if (key == "NAME") {
-          item.name = trim(value);
+          item.name = std::string(removeQuotes(trim(value)));
         }
         index = commaIndex + 1;
       } while (true);
@@ -147,8 +157,7 @@ int HLSParser::downloadAudioByName(std::string name, std::string localPath) {
       mAudioPlayListItems.begin(), mAudioPlayListItems.end(),
       [&name](const PlayListItemAudio &item) { return item.name == name; });
   if (iter == mAudioPlayListItems.end()) {
-    logger.error("can't find audio {}", name);
-    return -1;
+    throw std::runtime_error("no such audio name");
   }
 
   FFmpegHLSDownloader downloader(iter->url, localPath);
