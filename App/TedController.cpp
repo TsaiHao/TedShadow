@@ -2,8 +2,15 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <SDL_opengl.h>
+
 #include "TedController.h"
 #include "Utils/HLS.h"
+#include "Utils/ThreadPool.h"
+
+#include "Imgui/imgui.h"
+#include "Imgui/imgui_impl_opengl3.h"
+#include "Imgui/imgui_impl_sdl2.h"
 
 using ted::logger;
 
@@ -43,42 +50,37 @@ static inline std::string getCacheFile(const std::string &url) {
   return ss.str();
 }
 
-static std::vector<ted::Subtitle> fetchTedTalk(const std::string &url) {
-  std::string html;
-  ted::SimpleDownloader downloader(url, &html);
-  downloader.init();
-  downloader.download();
-
-  auto cacheFile = getCacheFile(url);
-  if (access(cacheFile.c_str(), F_OK) != 0) {
-    auto m3u8 = ted::retrieveM3U8UrlFromTalkHtml(html);
-    logger.info("fetching media resources from {}", m3u8);
-
-    ted::HLSParser parser(m3u8);
-    parser.init();
-    if (parser.getAudioPlayList().empty()) {
-      throw std::runtime_error("no audio playlist");
-    }
-    parser.downloadAudioByName("medium", getCacheFile(url));
+void TedController::GlobalInit() {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO |
+               SDL_INIT_GAMECONTROLLER) != 0) {
+    logger.error("Failed to initialize SDL: {}", SDL_GetError());
+    throw std::runtime_error("failed to initialize SDL");
   }
 
-  std::vector<ted::Subtitle> subtitles =
-      ted::retrieveSubtitlesFromTranscript(html);
-
-  return ted::mergeSubtitles(subtitles);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
+                      SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 }
 
 TedController::TedController(std::string url)
-    : mUrl(std::move(url)), mMediaFile(getCacheFile(mUrl)) {
+    : mUrl(std::move(url)), mMediaFile(getCacheFile(mUrl)),
+      mThreadPool(ThreadPool(4)) {
   if (access(CacheDir, F_OK) != 0) {
     mkdir(CacheDir, 0777);
   }
-  mSubtitles = fetchTedTalk(mUrl);
+  fetchTedTalk();
 
   mAudioDecoder = std::make_unique<ted::AudioDecoder>(mMediaFile);
   mAudioDecoder->init();
   mPlayer.init(mAudioDecoder->getAudioParam());
   mPlayer.play();
+
+  initUI();
 }
 
 int TedController::play() {
@@ -133,4 +135,108 @@ int TedController::seekByIndex(int64_t index) {
   mAudioDecoder->seek(subtitle.start.us());
 
   return 0;
+}
+
+void TedController::initUI() {
+  auto flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+                                 SDL_WINDOW_ALLOW_HIGHDPI);
+  const char *glslVersion = "#version 150";
+
+  mWindow = SDL_CreateWindow("ted", SDL_WINDOWPOS_CENTERED,
+                             SDL_WINDOWPOS_CENTERED, 1280, 720, flags);
+  mGLContext = SDL_GL_CreateContext(mWindow);
+  SDL_GL_MakeCurrent(mWindow, mGLContext);
+
+  SDL_GL_SetSwapInterval(1);
+
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+  ImGui::StyleColorsDark();
+
+  ImGui_ImplSDL2_InitForOpenGL(mWindow, mGLContext);
+  ImGui_ImplOpenGL3_Init(glslVersion);
+}
+
+void TedController::run() {
+  while (true) {
+    SDL_Event event;
+    if (SDL_PollEvent(&event)) {
+      ImGui_ImplSDL2_ProcessEvent(&event);
+      if (event.type == SDL_QUIT) {
+        break;
+      }
+    }
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+
+    {
+      ImGui::Begin("ted");
+      ImGui::Text("hello, world");
+      ImGui::End();
+    }
+
+    ImGui::Render();
+    auto &io = ImGui::GetIO();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(mWindow);
+  }
+}
+
+void TedController::exit() {
+  mUserExit.store(true);
+  if (mPlayThread.joinable()) {
+    mPlayThread.join();
+  }
+  isRunning = false;
+  logger.info("play thread exited");
+}
+
+void TedController::runImpl() {
+  while (!mUserExit.load()) {
+    if (play() != 0) {
+      break;
+    }
+  }
+}
+
+void TedController::fetchTedTalk() {
+  std::string html;
+  ted::SimpleDownloader downloader(mUrl, &html);
+  downloader.init();
+  downloader.download();
+
+  auto cacheFile = getCacheFile(mUrl);
+  std::optional<std::future<void>> audioDownload;
+  if (access(cacheFile.c_str(), F_OK) != 0) {
+    audioDownload = mThreadPool.enqueue([this, &html]() {
+      auto m3u8 = ted::retrieveM3U8UrlFromTalkHtml(html);
+      logger.info("fetching media resources from {}", m3u8);
+
+      ted::HLSParser parser(m3u8);
+      parser.init();
+      if (parser.getAudioPlayList().empty()) {
+        throw std::runtime_error("no audio playlist");
+      }
+      parser.downloadAudioByName("medium", mMediaFile);
+    });
+  }
+
+  auto subtitleDownload = mThreadPool.enqueue([this, &html]() {
+    auto subtitles = ted::retrieveSubtitlesFromTranscript(html);
+    mSubtitles = ted::mergeSubtitles(subtitles);
+  });
+
+  if (audioDownload) {
+    audioDownload->wait();
+  }
+  subtitleDownload.wait();
 }
